@@ -941,8 +941,8 @@ public partial class ControlFlowLeakage : AnalysisStage
                     await callTreeDumpWriter.WriteLineAsync($"{indentation}  Successors:");
 
                 // Check split successors: If an instruction caused a split, record the testcase IDs of its split successors
-                // _Usually_ the splitting instruction should be the same for all split successors.
-                // However, we support different split successor instructions here, so we get results even when the traces are a bit weird.
+                // The splitting instruction should be the same for all split successors.
+                
                 Dictionary<ulong, (AnalysisData.InstructionType Type, Dictionary<int, TestcaseIdSet> TestcaseIds)> splitSuccessorTestcases = new();
                 for(var s = 0; s < currentNode.SplitSuccessors.Count; s++)
                 {
@@ -980,9 +980,6 @@ public partial class ControlFlowLeakage : AnalysisStage
 
                 foreach(var (instructionId, (instructionType, testcaseIds)) in splitSuccessorTestcases)
                 {
-                    if(testcaseIds.Count <= 1)
-                        continue;
-
                     // This instruction appeared more than once, record its hashes in the result list
 
                     // Get analysis data object for this instruction

@@ -121,12 +121,14 @@ private:
     // The file where some additional trace prefix meta data is stored.
     static std::ofstream _prefixDataFileStream;
 
+    static ADDRINT *_filterAddr;
+    static size_t _filterAddrSize;
+
 private:
     // Opens the output file and sets the respective internal state.
     void OpenOutputFile(std::string& filename);
 
 public:
-
     // Creates a new trace logger.
     // -> filenamePrefix: The path prefix of the output file. Existing files are overwritten.
     explicit TraceWriter(const std::string& filenamePrefix);
@@ -190,6 +192,9 @@ public:
 
     // Writes information about the given loaded image into the trace metadata file.
     static void WriteImageLoadData(int interesting, uint64_t startAddress, uint64_t endAddress, std::string& name);
+
+    static void SetFilter(void** addr, size_t size);
+    static bool IsWhitelisted(ADDRINT addr);
 };
 
 // Contains meta data of loaded images.

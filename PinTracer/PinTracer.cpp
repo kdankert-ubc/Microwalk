@@ -565,6 +565,18 @@ VOID InstrumentImage(IMG img, [[maybe_unused]] VOID* v)
 		std::cerr << "    PinNotifyStackPointer() instrumented." << std::endl;
 	}
 
+	RTN notifyFilterRtn = RTN_FindByName(img, "PinNotifyFilter");
+	if (RTN_Valid(notifyFilterRtn))
+	{
+		// Save filter
+		RTN_Open(notifyFilterRtn);
+		RTN_InsertCall(notifyFilterRtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::SetFilter),
+			IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+			IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+			IARG_END);
+		RTN_Close(notifyFilterRtn);
+	}
+
 	// Find the Pin allocation notification function
 	RTN notifyAllocationRtn = RTN_FindByName(img, "PinNotifyAllocation");
 	if(RTN_Valid(notifyAllocationRtn))

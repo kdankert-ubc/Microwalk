@@ -12,7 +12,8 @@
 bool TraceWriter::_prefixMode;
 std::ofstream TraceWriter::_prefixDataFileStream;
 bool TraceWriter::_sawFirstReturn;
-
+ADDRINT *TraceWriter::_filterAddr = nullptr;
+size_t TraceWriter::_filterAddrSize = 0;
 
 /* TYPES */
 
@@ -138,6 +139,33 @@ void TraceWriter::WriteImageLoadData(int interesting, uint64_t startAddress, uin
     _prefixDataFileStream << "i\t" << interesting << "\t" << std::hex << startAddress << "\t" << std::hex << endAddress << "\t" << name << std::endl;
 }
 
+void TraceWriter::SetFilter(void **addr, size_t size)
+{
+    std::cerr << "Set filter, size: " << size << std::endl;
+    _filterAddr = (ADDRINT*) addr;
+    _filterAddrSize = size;
+
+    for (size_t i = 0; i < _filterAddrSize; ++i)
+    {
+        std::cerr << _filterAddr[i] << std::endl;
+    }
+}
+
+bool TraceWriter::IsWhitelisted(ADDRINT addr)
+{
+    if (_filterAddrSize <= 0)
+        return true;
+    
+    for (size_t i = 0; i < _filterAddrSize - 1; ++i)
+    {
+        ADDRINT diff = addr > _filterAddr[i] ? addr - _filterAddr[i] : _filterAddr[i] - addr;
+        if (diff <= 4)
+            return true;
+    }
+    
+    return false;
+}
+
 TraceEntry* TraceWriter::CheckBufferAndStore(TraceWriter *traceWriter, TraceEntry* nextEntry)
 {
     if(traceWriter == nullptr || nextEntry == nullptr)
@@ -157,6 +185,9 @@ TraceEntry* TraceWriter::CheckBufferAndStore(TraceWriter *traceWriter, TraceEntr
 
 TraceEntry* TraceWriter::InsertMemoryReadEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT instructionAddress, ADDRINT memoryAddress, UINT32 size)
 {
+    if (!IsWhitelisted(memoryAddress))
+        return nextEntry;
+
     // Create entry
     nextEntry->Type = TraceEntryTypes::MemoryRead;
     nextEntry->Param0 = size;
@@ -168,6 +199,9 @@ TraceEntry* TraceWriter::InsertMemoryReadEntry(TraceWriter *traceWriter, TraceEn
 
 TraceEntry* TraceWriter::InsertMemoryWriteEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT instructionAddress, ADDRINT memoryAddress, UINT32 size)
 {
+    if (!IsWhitelisted(memoryAddress))
+        return nextEntry;
+
     // Create entry
     nextEntry->Type = TraceEntryTypes::MemoryWrite;
     nextEntry->Param0 = size;
@@ -180,7 +214,7 @@ TraceEntry* TraceWriter::InsertMemoryWriteEntry(TraceWriter *traceWriter, TraceE
 TraceEntry* TraceWriter::InsertHeapAllocSizeParameterEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT64 size)
 {
     // Check whether given entry pointer is valid (we might be in a non-instrumented thread)
-    if(nextEntry == nullptr)
+    if(nextEntry == nullptr || _filterAddrSize > 0)
         return nextEntry;
 
     // Create entry
@@ -198,7 +232,7 @@ TraceEntry* TraceWriter::InsertCallocSizeParameterEntry(TraceWriter *traceWriter
 TraceEntry* TraceWriter::InsertHeapAllocAddressReturnEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT memoryAddress)
 {
     // Check whether given entry pointer is valid (we might be in a non-instrumented thread)
-    if(nextEntry == nullptr)
+    if(nextEntry == nullptr || _filterAddrSize > 0)
         return nextEntry;
 
     // Create entry
@@ -211,7 +245,7 @@ TraceEntry* TraceWriter::InsertHeapAllocAddressReturnEntry(TraceWriter *traceWri
 TraceEntry* TraceWriter::InsertHeapFreeAddressParameterEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT memoryAddress)
 {
     // Check whether given entry pointer is valid (we might be in a non-instrumented thread)
-    if(nextEntry == nullptr)
+    if(nextEntry == nullptr || _filterAddrSize > 0)
         return nextEntry;
 
     // Create entry
@@ -223,6 +257,9 @@ TraceEntry* TraceWriter::InsertHeapFreeAddressParameterEntry(TraceWriter *traceW
 
 TraceEntry* TraceWriter::InsertStackPointerModificationEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT instructionAddress, ADDRINT newStackPointer, UINT8 flags)
 {
+    if (_filterAddrSize > 0)
+        return nextEntry;
+    
     // Create entry
     nextEntry->Type = TraceEntryTypes::StackPointerModification;
     nextEntry->Flag = flags;
@@ -234,6 +271,9 @@ TraceEntry* TraceWriter::InsertStackPointerModificationEntry(TraceWriter *traceW
 
 TraceEntry* TraceWriter::InsertBranchEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT sourceAddress, ADDRINT targetAddress, UINT8 taken, UINT8 type)
 {
+    if (_filterAddrSize > 0 && !IsWhitelisted(targetAddress) && targetAddress != _filterAddr[_filterAddrSize - 1])
+        return nextEntry;
+
     // Create entry
     nextEntry->Type = TraceEntryTypes::Branch;
     nextEntry->Param1 = sourceAddress;
