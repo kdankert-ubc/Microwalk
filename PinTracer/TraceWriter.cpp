@@ -157,11 +157,8 @@ bool TraceWriter::IsWhitelisted(ADDRINT addr)
         return true;
     
     for (size_t i = 0; i < _filterAddrSize - 1; ++i)
-    {
-        ADDRINT diff = addr > _filterAddr[i] ? addr - _filterAddr[i] : _filterAddr[i] - addr;
-        if (diff <= 4)
+        if (addr == _filterAddr[i])
             return true;
-    }
     
     return false;
 }
