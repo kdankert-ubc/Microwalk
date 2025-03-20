@@ -114,7 +114,7 @@ private:
 private:
     // Determines whether the program is currently tracing the trace prefix.
     static bool _prefixMode;
-    
+
     // Determines whether the first return entry after testcase begin has been observed.
     static bool _sawFirstReturn;
 
@@ -194,7 +194,7 @@ public:
     static void WriteImageLoadData(int interesting, uint64_t startAddress, uint64_t endAddress, std::string& name);
 
     static void SetFilter(void** addr, size_t size);
-    static bool IsWhitelisted(ADDRINT addr);
+    static bool IsWhitelisted(ADDRINT addr, UINT8 type);
 };
 
 // Contains meta data of loaded images.
