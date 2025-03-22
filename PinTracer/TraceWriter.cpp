@@ -6,14 +6,17 @@
 #include <sstream>
 #include <utility>
 
+#include "FilterEntry.h"
+
 
 /* STATIC VARIABLES */
 
 bool TraceWriter::_prefixMode;
 std::ofstream TraceWriter::_prefixDataFileStream;
 bool TraceWriter::_sawFirstReturn;
-ADDRINT *TraceWriter::_filterAddr = nullptr;
+FilterEntry *TraceWriter::_filterAddr = nullptr;
 size_t TraceWriter::_filterAddrSize = 0;
+static UINT8 dataAccessFlag = 0;
 
 /* TYPES */
 
@@ -139,32 +142,128 @@ void TraceWriter::WriteImageLoadData(int interesting, uint64_t startAddress, uin
     _prefixDataFileStream << "i\t" << interesting << "\t" << std::hex << startAddress << "\t" << std::hex << endAddress << "\t" << name << std::endl;
 }
 
-void TraceWriter::SetFilter(void **addr, size_t size)
+void TraceWriter::SetFilter(FilterEntry *addr, size_t size)
 {
-    std::cerr << "Set filter, size: " << size << std::endl;
-    _filterAddr = (ADDRINT*) addr;
+    std::cerr << "Set filter, size: " << std::dec << size << std::endl;
+    _filterAddr = addr;
     _filterAddrSize = size;
 
     for (size_t i = 0; i < _filterAddrSize; ++i)
     {
-        std::cerr << _filterAddr[i] << std::endl;
+        FilterEntry &entry = _filterAddr[i];
+
+        if ((entry.originStart == 0 || entry.originEnd == 0) && (entry.targetStart == 0 || entry.targetEnd == 0))
+            continue;
+
+        bool whitelisted = FilterTypeMatch(FilterTypeWhiteList, entry.type);
+
+        bool cf = FilterTypeMatch(FilterTypeControlFlow, entry.type);
+        bool da = FilterTypeMatch(FilterTypeDataAccess, entry.type);
+
+        bool jump = FilterTypeMatch(FilterTypeJump, entry.type);
+        bool call = FilterTypeMatch(FilterTypeCall, entry.type);
+        bool ret = FilterTypeMatch(FilterTypeReturn, entry.type);
+        bool linearize = FilterTypeMatch(FilterTypeLinearize, entry.type);
+
+        bool read = FilterTypeMatch(FilterTypeRead, entry.type);
+        bool write = FilterTypeMatch(FilterTypeWrite, entry.type);
+
+        std::cerr << "Filter entry: ";
+        if (entry.originStart && entry.originEnd)
+            std::cerr << (void *) entry.originStart << " - " << (void *) entry.originEnd << " -> ";
+        else
+            std::cerr << "? -> ";
+
+        if (entry.targetStart && entry.targetEnd)
+            std::cerr << (void *) entry.targetStart << " - " << (void *) entry.targetEnd << " ";
+        else
+            std::cerr << "? ";
+
+        std::cerr << (whitelisted ? "(+)" : "(-)") << " ";
+        if (cf) {
+            std::cerr << "CF(";
+            if (jump)
+                std::cerr << "jump";
+            if (call) {
+                if (jump)
+                    std::cerr << ", ";
+                std::cerr << "call";
+                if (linearize)
+                    std::cerr << " -> linearize";
+            }
+            if (ret) {
+                if (jump || call)
+                        std::cerr << ", ";
+                    std::cerr << "return";
+            }
+            std::cerr << ")";
+        }
+
+        if (da) {
+            if (cf)
+                std::cerr << " ";
+            std::cerr << "DA(";
+            if (read)
+                std::cerr << "read";
+            if (write) {
+                if (read)
+                        std::cerr << ", ";
+                    std::cerr << "write";
+            }
+            std::cerr << ")";
+        }
+
+        std::cerr << std::endl;
     }
 }
 
-bool TraceWriter::IsWhitelisted(ADDRINT addr, UINT8 type)
+bool TraceWriter::IsWhitelisted(TraceEntryTypes type, ADDRINT instr, ADDRINT addr, UINT8 &flag)
 {
     if (_filterAddrSize <= 0)
         return true;
 
-    if (addr == _filterAddr[_filterAddrSize - 1]) {
-        return true;
-    }
+    for (size_t i = 0; i < _filterAddrSize; ++i) {
+        FilterEntry &entry = _filterAddr[i];
 
-    for (size_t i = 0; i < _filterAddrSize - 1; ++i)
-        if (addr == _filterAddr[i]) {
-            std::cerr << "Filtered address: " << std::hex << _filterAddr[i] << " (" << (int) type << "/" << (int) TraceEntryFlags::BranchTypeJump << ") " << (type & (UINT8) TraceEntryFlags::BranchTypeJump) << std::endl;
-            return type & (UINT8) TraceEntryFlags::BranchTypeJump;
+        if ((entry.originStart == 0 || entry.originEnd == 0) && (entry.targetStart == 0 || entry.targetEnd == 0))
+            continue;
+
+        bool acc = true;
+        if (entry.originStart && entry.originEnd)
+            acc &= instr >= (ADDRINT) entry.originStart && instr <= (ADDRINT) entry.originEnd;
+        if (entry.targetStart && entry.targetEnd)
+            acc &= addr >= (ADDRINT) entry.targetStart && addr <= (ADDRINT) entry.targetEnd;
+
+        if (!acc)
+            continue;
+
+        if (type == TraceEntryTypes::MemoryRead && FilterTypeMatch(FilterTypeDataAccess | FilterTypeRead, entry.type)) {
+            // std::cerr << "Memory read at address " << std::hex << addr << std::endl;
+            return entry.type & FilterTypeWhiteList;
         }
+
+        if (type == TraceEntryTypes::MemoryWrite && FilterTypeMatch(FilterTypeDataAccess | FilterTypeWrite, entry.type)) {
+            // std::cerr << "Memory write at address " << std::hex << addr << std::endl;
+            return entry.type & FilterTypeWhiteList;
+        }
+
+        if (type == TraceEntryTypes::Branch && FilterTypeMatch(FilterTypeControlFlow | FilterTypeJump, entry.type) && (flag & (UINT8) TraceEntryFlags::BranchTypeReturn) == (UINT8) TraceEntryFlags::BranchTypeJump) {
+            // std::cerr << "Jump to address " << std::hex << addr << std::endl;
+            return entry.type & FilterTypeWhiteList;
+        }
+
+        if (type == TraceEntryTypes::Branch && FilterTypeMatch(FilterTypeControlFlow | FilterTypeCall, entry.type) && (flag & (UINT8) TraceEntryFlags::BranchTypeReturn) == (UINT8) TraceEntryFlags::BranchTypeCall) {
+            // std::cerr << "Call to address " << std::hex << addr << std::endl;
+            if (entry.type & FilterTypeLinearize)
+                flag ^= (UINT8) TraceEntryFlags::BranchTypeCall ^ (UINT8) TraceEntryFlags::BranchTypeJump;
+            return entry.type & FilterTypeWhiteList;
+        }
+
+        if (type == TraceEntryTypes::Branch && FilterTypeMatch(FilterTypeControlFlow | FilterTypeCall, entry.type) && (flag & (UINT8) TraceEntryFlags::BranchTypeReturn) == (UINT8) TraceEntryFlags::BranchTypeReturn) {
+            // std::cerr << "Return from address " << std::hex << addr << std::endl;
+            return entry.type & FilterTypeWhiteList;
+        }
+    }
 
     return false;
 }
@@ -188,7 +287,7 @@ TraceEntry* TraceWriter::CheckBufferAndStore(TraceWriter *traceWriter, TraceEntr
 
 TraceEntry* TraceWriter::InsertMemoryReadEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT instructionAddress, ADDRINT memoryAddress, UINT32 size)
 {
-    if (_filterAddrSize > 0)
+    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::MemoryRead, instructionAddress, memoryAddress, dataAccessFlags))
         return nextEntry;
 
     // Create entry
@@ -202,7 +301,7 @@ TraceEntry* TraceWriter::InsertMemoryReadEntry(TraceWriter *traceWriter, TraceEn
 
 TraceEntry* TraceWriter::InsertMemoryWriteEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT instructionAddress, ADDRINT memoryAddress, UINT32 size)
 {
-    if (_filterAddrSize > 0)
+    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::MemoryWrite, instructionAddress, memoryAddress, dataAccessFlags))
         return nextEntry;
 
     // Create entry
@@ -274,7 +373,7 @@ TraceEntry* TraceWriter::InsertStackPointerModificationEntry(TraceWriter *traceW
 
 TraceEntry* TraceWriter::InsertBranchEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT sourceAddress, ADDRINT targetAddress, UINT8 taken, UINT8 type)
 {
-    if (_filterAddrSize > 0 && !IsWhitelisted(targetAddress, type))
+    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::Branch, sourceAddress, targetAddress, type))
         return nextEntry;
 
     // Create entry

@@ -1,6 +1,7 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -45,10 +46,20 @@ public class MapFileCollection
     /// <returns></returns>
     public async Task LoadMapFileAsync(string mapFileName)
     {
-        await _logger.LogDebugAsync($"Reading MAP file \"{mapFileName}\"...");
-        var mapFile = new MapFile(_logger);
-        await mapFile.InitializeFromFileAsync(mapFileName);
-        _mapFiles.Add(mapFile);
+        var imageName = File.ReadLines(mapFileName).First();
+        var mapFile = _mapFiles.FirstOrDefault(m => string.Compare(imageName, m.ImageName, true, CultureInfo.InvariantCulture) == 0);
+        if (mapFile == null)
+        {
+            await _logger.LogDebugAsync($"Reading new MAP file \"{mapFileName}\"...");
+            mapFile = new MapFile(_logger);
+            await mapFile.InitializeFromFileAsync(mapFileName);
+            _mapFiles.Add(mapFile);
+        }
+        else
+        {
+            await _logger.LogDebugAsync($"Merging into existing image MAP \"{imageName}\"...");
+            await mapFile.InitializeFromFileAsync(mapFileName);
+        }
     }
 
     /// <summary>
@@ -63,7 +74,7 @@ public class MapFileCollection
         // Does a map file exist? Does it contain a suitable entry?
         var mapFile = ResolveMapFile(imageId, imageFileName);
         var symbolData = mapFile?.GetSymbolDataByAddress(address);
-        if(symbolData == null)
+        if (symbolData == null)
         {
             // Just format the image name and the image offset
             return $"{imageFileName}:{address:x}";
@@ -82,14 +93,14 @@ public class MapFileCollection
     private MapFile? ResolveMapFile(int imageId, string imageFileName)
     {
         // Map file known?
-        if(_mapFileIdLookup.TryGetValue(imageId, out var mapFile))
+        if (_mapFileIdLookup.TryGetValue(imageId, out var mapFile))
             return mapFile;
 
         // Find MAP file with matching image name
         mapFile = _mapFiles.FirstOrDefault(m => string.Compare(imageFileName, m.ImageName, true, CultureInfo.InvariantCulture) == 0);
-        if(mapFile != null)
+        if (mapFile != null)
             _mapFileIdLookup[imageId] = mapFile;
-        else if(_imageIdsWithoutMapFile.TryAdd(imageId, new object()))
+        else if (_imageIdsWithoutMapFile.TryAdd(imageId, new object()))
         {
             _logger.LogWarningAsync($"No MAP file found for image #{imageId} \"{imageFileName}\"").Wait();
         }

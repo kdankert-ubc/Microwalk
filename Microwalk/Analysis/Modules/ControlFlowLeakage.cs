@@ -41,6 +41,8 @@ public partial class ControlFlowLeakage : AnalysisStage
     /// MAP file collection for resolving symbol names.
     /// </summary>
     private MapFileCollection _mapFileCollection = null!;
+    
+    private List<Func<Task>> _deferredMapFileTasks = null!;
 
     /// <summary>
     /// Controls whether the call tree should be written to a dump file.
@@ -94,6 +96,10 @@ public partial class ControlFlowLeakage : AnalysisStage
 
     public override async Task AddTraceAsync(TraceEntity traceEntity)
     {
+        foreach (var task in _deferredMapFileTasks)
+            await task();
+        _deferredMapFileTasks.Clear();
+        
         /*
          * Runs linearly through a trace and stores it in a radix trie-like call tree structure.
          *
@@ -1410,18 +1416,34 @@ public partial class ControlFlowLeakage : AnalysisStage
 
         // Load MAP files
         _mapFileCollection = new MapFileCollection(Logger);
+        _deferredMapFileTasks = [];
+        
+        var deferred = moduleOptions.GetChildNodeOrDefault("deferred-load")?.AsBoolean() ?? false;
+        
         var mapFilesNode = moduleOptions.GetChildNodeOrDefault("map-files");
         if(mapFilesNode is ListNode mapFileListNode)
         {
-            foreach(var mapFileNode in mapFileListNode.Children)
-                await _mapFileCollection.LoadMapFileAsync(mapFileNode.AsString() ?? throw new ConfigurationException("Invalid node type in map file list."));
+            foreach (var mapFileNode in mapFileListNode.Children)
+            {
+                var file = mapFileNode.AsString() ??
+                           throw new ConfigurationException("Invalid node type in map file list.");
+                _deferredMapFileTasks.Add(async () => await _mapFileCollection.LoadMapFileAsync(file));
+            }
         }
 
         var mapDirectory = moduleOptions.GetChildNodeOrDefault("map-directory")?.AsString();
         if(mapDirectory != null)
         {
-            foreach(var mapFile in Directory.EnumerateFiles(mapDirectory, "*.map"))
-                await _mapFileCollection.LoadMapFileAsync(mapFile);
+            foreach (var mapFile in Directory.EnumerateFiles(mapDirectory, "*.map")) 
+                _deferredMapFileTasks.Add(async () => await _mapFileCollection.LoadMapFileAsync(mapFile));
+        }
+
+        if (!deferred)
+        {
+            foreach (var task in _deferredMapFileTasks)
+                await task();
+            
+            _deferredMapFileTasks.Clear();
         }
 
         // Dump internal data?

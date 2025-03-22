@@ -13,6 +13,7 @@ Contains structs to store the trace data.
 #include <fstream>
 #include <sstream>
 
+#include "FilterEntry.h"
 
 /* TYPES */
 
@@ -121,7 +122,7 @@ private:
     // The file where some additional trace prefix meta data is stored.
     static std::ofstream _prefixDataFileStream;
 
-    static ADDRINT *_filterAddr;
+    static FilterEntry *_filterAddr;
     static size_t _filterAddrSize;
 
 private:
@@ -193,8 +194,8 @@ public:
     // Writes information about the given loaded image into the trace metadata file.
     static void WriteImageLoadData(int interesting, uint64_t startAddress, uint64_t endAddress, std::string& name);
 
-    static void SetFilter(void** addr, size_t size);
-    static bool IsWhitelisted(ADDRINT addr, UINT8 type);
+    static void SetFilter(FilterEntry *addr, size_t size);
+    static bool IsWhitelisted(TraceEntryTypes type, ADDRINT instr, ADDRINT addr, UINT8 &flag);
 };
 
 // Contains meta data of loaded images.
