@@ -195,7 +195,7 @@ public:
     static void WriteImageLoadData(int interesting, uint64_t startAddress, uint64_t endAddress, std::string& name);
 
     static void SetFilter(FilterEntry *addr, size_t size);
-    static bool IsWhitelisted(TraceEntryTypes type, ADDRINT instr, ADDRINT addr, UINT8 &flag);
+    static bool IsWhitelisted(TraceEntryTypes type, ADDRINT instr, ADDRINT addr, UINT8 *flag);
 };
 
 // Contains meta data of loaded images.

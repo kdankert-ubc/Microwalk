@@ -16,7 +16,6 @@ std::ofstream TraceWriter::_prefixDataFileStream;
 bool TraceWriter::_sawFirstReturn;
 FilterEntry *TraceWriter::_filterAddr = nullptr;
 size_t TraceWriter::_filterAddrSize = 0;
-static UINT8 dataAccessFlag = 0;
 
 /* TYPES */
 
@@ -217,7 +216,7 @@ void TraceWriter::SetFilter(FilterEntry *addr, size_t size)
     }
 }
 
-bool TraceWriter::IsWhitelisted(TraceEntryTypes type, ADDRINT instr, ADDRINT addr, UINT8 &flag)
+bool TraceWriter::IsWhitelisted(TraceEntryTypes type, ADDRINT instr, ADDRINT addr, UINT8 *flag)
 {
     if (_filterAddrSize <= 0)
         return true;
@@ -247,19 +246,23 @@ bool TraceWriter::IsWhitelisted(TraceEntryTypes type, ADDRINT instr, ADDRINT add
             return entry.type & FilterTypeWhiteList;
         }
 
-        if (type == TraceEntryTypes::Branch && FilterTypeMatch(FilterTypeControlFlow | FilterTypeJump, entry.type) && (flag & (UINT8) TraceEntryFlags::BranchTypeReturn) == (UINT8) TraceEntryFlags::BranchTypeJump) {
+        if (flag == nullptr) {
+            continue;
+        }
+
+        if (type == TraceEntryTypes::Branch && FilterTypeMatch(FilterTypeControlFlow | FilterTypeJump, entry.type) && (*flag & (UINT8) TraceEntryFlags::BranchTypeReturn) == (UINT8) TraceEntryFlags::BranchTypeJump) {
             // std::cerr << "Jump to address " << std::hex << addr << std::endl;
             return entry.type & FilterTypeWhiteList;
         }
 
-        if (type == TraceEntryTypes::Branch && FilterTypeMatch(FilterTypeControlFlow | FilterTypeCall, entry.type) && (flag & (UINT8) TraceEntryFlags::BranchTypeReturn) == (UINT8) TraceEntryFlags::BranchTypeCall) {
+        if (type == TraceEntryTypes::Branch && FilterTypeMatch(FilterTypeControlFlow | FilterTypeCall, entry.type) && (*flag & (UINT8) TraceEntryFlags::BranchTypeReturn) == (UINT8) TraceEntryFlags::BranchTypeCall) {
             // std::cerr << "Call to address " << std::hex << addr << std::endl;
             if (entry.type & FilterTypeLinearize)
-                flag ^= (UINT8) TraceEntryFlags::BranchTypeCall ^ (UINT8) TraceEntryFlags::BranchTypeJump;
+                *flag ^= (UINT8) TraceEntryFlags::BranchTypeCall ^ (UINT8) TraceEntryFlags::BranchTypeJump;
             return entry.type & FilterTypeWhiteList;
         }
 
-        if (type == TraceEntryTypes::Branch && FilterTypeMatch(FilterTypeControlFlow | FilterTypeCall, entry.type) && (flag & (UINT8) TraceEntryFlags::BranchTypeReturn) == (UINT8) TraceEntryFlags::BranchTypeReturn) {
+        if (type == TraceEntryTypes::Branch && FilterTypeMatch(FilterTypeControlFlow | FilterTypeCall, entry.type) && (*flag & (UINT8) TraceEntryFlags::BranchTypeReturn) == (UINT8) TraceEntryFlags::BranchTypeReturn) {
             // std::cerr << "Return from address " << std::hex << addr << std::endl;
             return entry.type & FilterTypeWhiteList;
         }
@@ -287,7 +290,7 @@ TraceEntry* TraceWriter::CheckBufferAndStore(TraceWriter *traceWriter, TraceEntr
 
 TraceEntry* TraceWriter::InsertMemoryReadEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT instructionAddress, ADDRINT memoryAddress, UINT32 size)
 {
-    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::MemoryRead, instructionAddress, memoryAddress, dataAccessFlags))
+    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::MemoryRead, instructionAddress, memoryAddress, nullptr))
         return nextEntry;
 
     // Create entry
@@ -301,7 +304,7 @@ TraceEntry* TraceWriter::InsertMemoryReadEntry(TraceWriter *traceWriter, TraceEn
 
 TraceEntry* TraceWriter::InsertMemoryWriteEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT instructionAddress, ADDRINT memoryAddress, UINT32 size)
 {
-    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::MemoryWrite, instructionAddress, memoryAddress, dataAccessFlags))
+    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::MemoryWrite, instructionAddress, memoryAddress, nullptr))
         return nextEntry;
 
     // Create entry
@@ -373,7 +376,7 @@ TraceEntry* TraceWriter::InsertStackPointerModificationEntry(TraceWriter *traceW
 
 TraceEntry* TraceWriter::InsertBranchEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT sourceAddress, ADDRINT targetAddress, UINT8 taken, UINT8 type)
 {
-    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::Branch, sourceAddress, targetAddress, type))
+    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::Branch, sourceAddress, targetAddress, &type))
         return nextEntry;
 
     // Create entry
