@@ -344,7 +344,7 @@ function instrumentDynamic(path)
     }
 
     // Run instrumentation process
-    execSync(`node ${instrumentFileScriptPath} "${path}"`, { stdio: 'inherit' });
+    execSync(`node ${instrumentFileScriptPath} "${path}" ${path.state.runtime ?? ""}`, { stdio: 'inherit' });
 
     // Return name of instrumented file
     return instrumentedPath;

@@ -3,7 +3,7 @@
  */
 
 import * as t from "@babel/types";
-import * as constants from "./constants.cjs";
+import * as constants from "./constants.mjs";
 
 /**
  * 

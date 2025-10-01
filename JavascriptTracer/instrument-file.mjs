@@ -13,11 +13,12 @@ const cliArgs = process.argv;
 
 if (cliArgs.length < 3) {
     console.error('No source file provided');
-    console.log(`Usage: node ${cliArgs[1]} FILEPATH`)
+    console.log(`Usage: node ${cliArgs[1]} FILEPATH (runtime)`)
     process.exit(1);
 }
 
 let filePath = cliArgs[2];
+let runtime = cliArgs[3] ?? "nodejs";
 
 // Make path absolute
 if (!path.isAbsolute(filePath)) {
@@ -25,7 +26,7 @@ if (!path.isAbsolute(filePath)) {
 }
 
 // Ensure everything is instrumented
-instrumentFileTree(filePath);
+instrumentFileTree(filePath, runtime);
 
 export const instrumentedName = getInstrumentedName(filePath);
 

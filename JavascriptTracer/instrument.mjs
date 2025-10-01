@@ -13,7 +13,7 @@ import * as templates from "./templates.mjs";
 import * as setup from "./instrument-setup.mjs";
 import * as util from "./instrument-utility.mjs";
 import * as pathModule from "node:path";
-import * as constants from "./constants.cjs";
+import * as constants from "./constants.mjs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import * as fs from "node:fs";
@@ -22,7 +22,18 @@ import * as path from "node:path";
 import * as importMetaResolve from "import-meta-resolve";
 
 // Path of runtime.
-const runtimePath = pathModule.resolve(pathModule.dirname(fileURLToPath(import.meta.url)), 'runtime.cjs');
+const runtimePath = pathModule.dirname(fileURLToPath(import.meta.url));
+
+const importStatements = {
+    cjs: (file) => `const ${constants.INSTR_MODULE_NAME} = require("${path.resolve(runtimePath, file)}");`,
+    esm: (file) => `import * as ${constants.INSTR_MODULE_NAME} from "${path.resolve(runtimePath, file)}";`,
+}
+
+const runtimeMapping = {
+    "nodejs-script": importStatements.cjs("runtime-nodejs.cjs"),
+    "nodejs-module": importStatements.esm("runtime-nodejs.cjs"),
+    quickjs: importStatements.esm("runtime-quickjs.mjs"),
+}
 
 // Collects files pending instrumentation.
 let filesToInstrument = new Set();
@@ -42,12 +53,11 @@ let requireFunc = null;
 // set of functions that are defined in the instrumented file
 const functionDefs = new Set();
 
-function genPreAst(filePath, isModule) {
-    let importStatement;
-    if(isModule)
-        importStatement = `import * as ${constants.INSTR_MODULE_NAME} from "${runtimePath}";`;
-    else
-        importStatement = `const ${constants.INSTR_MODULE_NAME} = require("${runtimePath}");`;
+function genPreAst(filePath, runtime, sourceType) {
+    const importStatement = runtimeMapping[`${runtime}-${sourceType}`] ?? runtimeMapping[runtime];
+    if (!importStatement) {
+        throw Error(`Unsupported runtime: ${runtime} with sourceType: ${sourceType}`)
+    }
 
     return template.default.ast(`
         ${importStatement}
@@ -179,8 +189,9 @@ const generalVisitor = {
             queueLengths.set(context, context.queue.length);
         }
 
+        console.log("    runtime:", path.state.runtime);
         console.log("    type:", path.node.sourceType);
-        const preAst = genPreAst(currentFilePath, path.node.sourceType === 'module');
+        const preAst = genPreAst(currentFilePath, path.state.runtime, path.node.sourceType);
         preAst.forEach(e => e.new = true);
         path.unshiftContainer('body', preAst);
 
@@ -743,15 +754,15 @@ export function getInstrumentedName(filePath) {
 import printAST from "ast-pretty-print";
 import { notEqual } from "node:assert";
 import { is } from "@babel/types";
-export function instrumentAst(filePath, ast) {
+export function instrumentAst(filePath, ast, state) {
     currentDir = pathModule.dirname(filePath);
     currentFilePath = filePath;
 
     requireFunc = createRequire(filePath);
 
     // Setup: Simplify AST, split up certain constructs
-    traverse.default(ast, setup.setupVisitor);
-    traverse.default(ast, setup.setupCallExpressionsVisitor);
+    traverse.default(ast, setup.setupVisitor, undefined, state);
+    traverse.default(ast, setup.setupCallExpressionsVisitor, state);
 
     // Debugging: Dump intermediate AST after setup
     fs.writeFileSync(getInstrumentedName(filePath) + ".tmp", generate.default(ast, {comments: false}).code);
@@ -759,7 +770,7 @@ export function instrumentAst(filePath, ast) {
 
     // Actual instrumentation
     try { 
-        traverse.default(ast, instrumentationVisitor);
+        traverse.default(ast, instrumentationVisitor, undefined, state);
     }
     catch (error) {
         console.error(error.message);
@@ -767,7 +778,7 @@ export function instrumentAst(filePath, ast) {
     }
 }
 
-export function instrumentFileTree(filePath) {
+export function instrumentFileTree(filePath, runtime) {
 
     // If the file is not already instrumented, instrument it and all its dependencies
     let filePathInstrumented = getInstrumentedName(filePath);
@@ -790,9 +801,10 @@ export function instrumentFileTree(filePath) {
                 // Read and parse given file
                 const code = fs.readFileSync(currentFile, { encoding: "utf-8" });
                 const ast = parser.parse(code, { sourceFilename: path.basename(currentFile), sourceType: "unambiguous" });
+                const state = { runtime };
 
                 // Do instrumentation
-                instrumentAst(currentFile, ast);
+                instrumentAst(currentFile, ast, state);
 
                 // Get absolute path of instrumented file and write it
                 console.log(`    writing ${getInstrumentedName(currentFile)}`);

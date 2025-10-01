@@ -4,7 +4,7 @@
 
 import * as t from "@babel/types";
 import * as util from "./instrument-utility.mjs";
-import * as constants from "./constants.cjs";
+import * as constants from "./constants.mjs";
 import template from "@babel/template";
 
 // counter that gets incremented with each switch statement

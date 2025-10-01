@@ -1,5 +1,5 @@
 import template from "@babel/template";
-import * as constants from "./constants.cjs";
+import * as constants from "./constants.mjs";
 
 /**
  * Generates a string formatting relevant source information given a SourceLocation object
