@@ -266,6 +266,8 @@ bool TraceWriter::IsWhitelisted(TraceEntryTypes type, ADDRINT instr, ADDRINT add
             // std::cerr << "Return from address " << std::hex << addr << std::endl;
             return entry.type & FilterTypeWhiteList;
         }
+
+        // TODO: add source info to whitelist.
     }
 
     return false;
@@ -410,6 +412,24 @@ TraceEntry* TraceWriter::InsertStackPointerInfoEntry(TraceWriter *traceWriter, T
 
     return CheckBufferAndStore(traceWriter, nextEntry + 1);
 }
+
+// TODO: Adjust parameter types
+TraceEntry* TraceWriter::InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT sourceFunction, ADDRINT sourceFile, ADDRINT line)
+{
+    // TODO: Modify the whitelist settings
+    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::SourceInfo, sourceFunction, sourceFile, nullptr))
+        return nextEntry;
+
+    // Create entry
+    nextEntry->Type = TraceEntryTypes::SourceInfo;
+    nextEntry->Param0 = line;
+    // TODO: Revisit wheter we need to add a hashing mechanism for retrieving source file names
+    nextEntry->Param1 = sourceFile;
+    nextEntry->Param2 = sourceFunction;
+
+    return CheckBufferAndStore(traceWriter, nextEntry + 1);
+}
+
 
 ImageData::ImageData(bool interesting, std::string name, UINT64 startAddress, UINT64 endAddress)
 {

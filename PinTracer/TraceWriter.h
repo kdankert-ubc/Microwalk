@@ -42,7 +42,10 @@ enum struct TraceEntryTypes : UINT32
     StackPointerInfo = 7,
 
     // A modification of the stack pointer.
-    StackPointerModification = 8
+    StackPointerModification = 8,
+
+    // Source file information
+    SourceInfo = 9
 };
 
 // Represents one entry in a trace buffer.
