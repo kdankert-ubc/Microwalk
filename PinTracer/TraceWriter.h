@@ -190,6 +190,9 @@ public:
     // Creates a new StackPointerInfo entry.
     static TraceEntry* InsertStackPointerInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT stackPointerMin, ADDRINT stackPointerMax);
 
+    // Creates a new SourceInfo entry.
+    static TraceEntry* InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT16 col, UINT64 line, UINT64 sourceFile);
+
     // Initializes the static part of the prefix mode (record image loads, even when the thread's TraceWriter object is not yet initialized).
     // -> filenamePrefix: The path prefix of the output file. Existing files are overwritten.
     static void InitPrefixMode(const std::string& filenamePrefix);

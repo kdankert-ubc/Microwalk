@@ -413,19 +413,14 @@ TraceEntry* TraceWriter::InsertStackPointerInfoEntry(TraceWriter *traceWriter, T
     return CheckBufferAndStore(traceWriter, nextEntry + 1);
 }
 
-// TODO: Adjust parameter types
-TraceEntry* TraceWriter::InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT sourceFunction, ADDRINT sourceFile, ADDRINT line)
+TraceEntry* TraceWriter::InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT16 col, UINT64 line, UINT64 sourceFile)
 {
-    // TODO: Modify the whitelist settings
-    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::SourceInfo, sourceFunction, sourceFile, nullptr))
-        return nextEntry;
-
     // Create entry
     nextEntry->Type = TraceEntryTypes::SourceInfo;
-    nextEntry->Param0 = line;
-    // TODO: Revisit wheter we need to add a hashing mechanism for retrieving source file names
-    nextEntry->Param1 = sourceFile;
-    nextEntry->Param2 = sourceFunction;
+    nextEntry->Param0 = col;
+    nextEntry->Param1 = line;
+    // sourceFile is a JSAtom
+    nextEntry->Param2 = sourceFile;
 
     return CheckBufferAndStore(traceWriter, nextEntry + 1);
 }
