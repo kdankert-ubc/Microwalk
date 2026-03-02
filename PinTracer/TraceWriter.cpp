@@ -16,6 +16,7 @@ std::ofstream TraceWriter::_prefixDataFileStream;
 bool TraceWriter::_sawFirstReturn;
 FilterEntry *TraceWriter::_filterAddr = nullptr;
 size_t TraceWriter::_filterAddrSize = 0;
+std::map<int, std::string> _atomToName;
 
 /* TYPES */
 
@@ -83,6 +84,31 @@ void TraceWriter::WriteBufferToFile(TraceEntry* end)
         _outputFileStream.write(reinterpret_cast<char*>(_entries), static_cast<std::streamsize>(reinterpret_cast<ADDRINT>(end) - reinterpret_cast<ADDRINT>(_entries)));
 }
 
+
+void TraceWriter::WriteMapToFile()
+{
+    std::stringstream filenameStream;
+    filenameStream << _outputFilenamePrefix << "map" << std::dec << _testcaseId << ".temp";
+    std::string filename = filenameStream.str();
+
+    std::ofstream _traceOutputFileStream(filename.c_str(), std::ofstream::out | std::ofstream::trunc);
+    _traceOutputFileStream.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+    if(!_traceOutputFileStream)
+    {
+        std::cerr << "Error: Could not open output file '" << filename << "'." << std::endl;
+        exit(1);
+    }
+
+    // JSAtom:Source File Name
+    for (const auto& pair : _atomToName) 
+    {
+        _traceOutputFileStream << pair.first << ":" << pair.second << "\n";
+    }
+
+    std::cerr << "Writing map values for testcase #" << std::dec << _testcaseId << std::endl;
+    _traceOutputFileStream.close();
+}
+
 void TraceWriter::TestcaseStart(int testcaseId, TraceEntry* nextEntry)
 {
     // Exit prefix mode if necessary
@@ -125,6 +151,7 @@ void TraceWriter::TestcaseEnd(TraceEntry* nextEntry)
     }
 
     // Disable tracing until next test case starts
+    WriteMapToFile();
     _testcaseId = -1;
 }
 
@@ -413,14 +440,17 @@ TraceEntry* TraceWriter::InsertStackPointerInfoEntry(TraceWriter *traceWriter, T
     return CheckBufferAndStore(traceWriter, nextEntry + 1);
 }
 
-TraceEntry* TraceWriter::InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT16 col, UINT64 line, UINT64 sourceFile)
+TraceEntry* TraceWriter::InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT16 col, UINT64 line, UINT64 sourceAtom, ADDRINT sourceName)
 {
     // Create entry
     nextEntry->Type = TraceEntryTypes::SourceInfo;
     nextEntry->Param0 = col;
     nextEntry->Param1 = line;
-    // sourceFile is a JSAtom
-    nextEntry->Param2 = sourceFile;
+    nextEntry->Param2 = sourceAtom;
+    // Ensure no duplciate naming atoms
+    if (_atomToName.find(sourceAtom) == _atomToName.end()) {
+        _atomToName[sourceAtom] = sourceName;
+    }
 
     return CheckBufferAndStore(traceWriter, nextEntry + 1);
 }

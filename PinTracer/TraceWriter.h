@@ -149,6 +149,9 @@ public:
     // Writes the contents of the trace buffer into the output file.
     // -> end: A pointer to the address *after* the last entry to be written.
     void WriteBufferToFile(TraceEntry* end);
+    
+    // Writes the contents of the JSAtom to source file map to a temporary output file.
+    void WriteMapToFile();
 
     // Sets the next testcase ID and opens a suitable trace file.
     void TestcaseStart(int testcaseId, TraceEntry* nextEntry);
@@ -191,7 +194,7 @@ public:
     static TraceEntry* InsertStackPointerInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT stackPointerMin, ADDRINT stackPointerMax);
 
     // Creates a new SourceInfo entry.
-    static TraceEntry* InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT16 col, UINT64 line, UINT64 sourceFile);
+    static TraceEntry* InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT16 col, UINT64 line, UINT64 sourceAtom, ADDRINT sourceName);
 
     // Initializes the static part of the prefix mode (record image loads, even when the thread's TraceWriter object is not yet initialized).
     // -> filenamePrefix: The path prefix of the output file. Existing files are overwritten.

@@ -15,7 +15,6 @@ To get meaningful outputs, make sure that these functions are called with "call"
 // Sometimes the compiler replaces tail calls by jump instructions, tripping Pin's IPOINT_AFTER function end detection, leading to missing allocation address returns.
 //#define USE_LEGACY_ALLOC_RETURN_TRACKING
 
-#define SOURCE_INFO_TRACKING
 
 /* GLOBAL VARIABLES */
 
@@ -602,7 +601,6 @@ VOID InstrumentImage(IMG img, [[maybe_unused]] VOID* v)
 	}
 
 	// Find runtime source file info debug function
-#if defined(SOURCE_INFO_TRACKING)
 	RTN SourceInfoRtn = RTN_FindByName(img, "PinSourceInfo");
 	if (RTN_Valid(SourceInfoRtn))
 	{
@@ -614,12 +612,12 @@ VOID InstrumentImage(IMG img, [[maybe_unused]] VOID* v)
 			IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
 			IARG_FUNCARG_ENTRYPOINT_VALUE, 1, 
 			IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
+			IARG_FUNCARG_ENTRYPOINT_VALUE, 3,
 			IARG_END);
 		RTN_Close(SourceInfoRtn);
 
 		std::cerr << "    PinSourceInfo() instrumented." << std::endl;
 	}
-#endif
 
 	// Find allocation and free functions to log allocation sizes and addresses
 #if defined(_WIN32)
