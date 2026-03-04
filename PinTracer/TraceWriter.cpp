@@ -88,24 +88,24 @@ void TraceWriter::WriteBufferToFile(TraceEntry* end)
 void TraceWriter::WriteMapToFile()
 {
     std::stringstream filenameStream;
-    filenameStream << _outputFilenamePrefix << "map" << std::dec << _testcaseId << ".temp";
+    filenameStream << _outputFilenamePrefix << "map" << ".temp";
     std::string filename = filenameStream.str();
 
     std::ofstream _traceOutputFileStream(filename.c_str(), std::ofstream::out | std::ofstream::trunc);
     _traceOutputFileStream.exceptions(std::ofstream::failbit | std::ofstream::badbit);
     if(!_traceOutputFileStream)
     {
-        std::cerr << "Error: Could not open output file '" << filename << "'." << std::endl;
+        std::cerr << "Error: Could not open output file '" << filename << "'.temp" << std::endl;
         exit(1);
     }
 
     // JSAtom:Source File Name
     for (const auto& pair : _atomToName) 
     {
-        _traceOutputFileStream << pair.first << ":" << pair.second << "\n";
+        _traceOutputFileStream << pair.first << ":" << pair.second << std::endl;
     }
 
-    std::cerr << "Writing map values for testcase #" << std::dec << _testcaseId << std::endl;
+    std::cerr << "Writing map values for map.temp" << std::endl;
     _traceOutputFileStream.close();
 }
 
@@ -150,8 +150,10 @@ void TraceWriter::TestcaseEnd(TraceEntry* nextEntry)
 		std::cout << "t\t" << _currentOutputFilename << std::endl;
     }
 
-    // Disable tracing until next test case starts
+    // Write source info mappings
     WriteMapToFile();
+
+    // Disable tracing until next test case starts
     _testcaseId = -1;
 }
 
@@ -440,7 +442,7 @@ TraceEntry* TraceWriter::InsertStackPointerInfoEntry(TraceWriter *traceWriter, T
     return CheckBufferAndStore(traceWriter, nextEntry + 1);
 }
 
-TraceEntry* TraceWriter::InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT16 col, UINT64 line, UINT64 sourceAtom, ADDRINT sourceName)
+TraceEntry* TraceWriter::InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT16 col, UINT64 line, UINT64 sourceAtom, const char* sourceName)
 {
     // Create entry
     nextEntry->Type = TraceEntryTypes::SourceInfo;
