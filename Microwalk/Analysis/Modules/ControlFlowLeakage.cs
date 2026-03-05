@@ -861,6 +861,30 @@ public partial class ControlFlowLeakage : AnalysisStage
                     }
                 }
             }
+            else if(traceEntry.EntryType is TraceEntryTypes.SourceInfo) 
+            {
+                /*
+                 * Step 1: Extract source info data
+                 */
+
+                uint col = 0;
+                uint line = 0;
+                string sourceName = "";
+                var info = (SourceInfo)traceEntry;
+
+                col = alloc.ColNum;
+                line = alloc.LineNum;
+                sourceName = alloc.SourceName;
+
+                /*
+                 * Step 2: Add new node for each SourceInfo trace entry.
+                 *
+                 * We don't split the tree ever since obtaining source info does not affect control flow.
+                 */
+
+
+                break;
+            }
         }
     }
 

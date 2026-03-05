@@ -153,6 +153,7 @@ public class TraceFileEnumerator : IEnumerator<ITraceEntry>
             TraceEntryTypes.TraceEntryTypes.HeapMemoryAccess => new HeapMemoryAccess(),
             TraceEntryTypes.TraceEntryTypes.ImageMemoryAccess => new ImageMemoryAccess(),
             TraceEntryTypes.TraceEntryTypes.StackMemoryAccess => new StackMemoryAccess(),
+            TraceEntryTypes.TraceEntryTypes.SourceInfo => new SourceInfo(),
             _ => throw new TraceFormatException("Illegal trace entry type.")
         };
         _current.FromReader(_reader);
@@ -188,6 +189,7 @@ public class NonAllocatingTraceFileEnumerator : IEnumerator<ITraceEntry>
     private readonly HeapMemoryAccess _traceEntryHeapMemoryAccess = new();
     private readonly ImageMemoryAccess _traceEntryImageMemoryAccess = new();
     private readonly StackMemoryAccess _traceEntryStackMemoryAccess = new();
+    private readonly StackMemoryAccess _traceEntrySourceInfo = new();
 
     public ITraceEntry Current => _current ?? throw new InvalidOperationException("Current should not be used in this state");
     object IEnumerator.Current => Current;
@@ -217,6 +219,7 @@ public class NonAllocatingTraceFileEnumerator : IEnumerator<ITraceEntry>
             TraceEntryTypes.TraceEntryTypes.HeapMemoryAccess => _traceEntryHeapMemoryAccess,
             TraceEntryTypes.TraceEntryTypes.ImageMemoryAccess => _traceEntryImageMemoryAccess,
             TraceEntryTypes.TraceEntryTypes.StackMemoryAccess => _traceEntryStackMemoryAccess,
+            TraceEntryTypes.TraceEntryTypes.SourceInfo => _traceEntrySourceInfo,
             _ => throw new TraceFormatException("Illegal trace entry type.")
         };
         _current.FromReader(_reader);

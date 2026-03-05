@@ -576,6 +576,34 @@ public class PinTracePreprocessor : PreprocessorStage
 
                         break;
                     }
+
+                    case RawTraceEntryTypes.SourceInfo when !isPrefix:
+                    {
+                        var col = rawTraceEntry.Param0;
+                        var line = rawTraceEntry.Param1;
+                        var sourceAtom = rawTraceEntry.Param2;
+
+                        // TODO: parse temp file using sourceAtom to get filename.
+                        // TODO: Figure out what the path is relative to the test.
+                        
+                        // TODO: Delete debug statement later. Currently for testing.
+                        Logger.LogWarningAsync($"{logPrefix} SourceInfo created: Col: {col}, Line: {line}, SourceAtom: {sourceAtom:x}").Wait();
+
+
+                        var entry = new SourceInfo
+                        {
+                            // adjust
+                            ColNum = col,
+                            LineNum = line,
+                            SourceName = $"sourceName placeholder {sourceAtom}",
+                        };
+
+                        // Create entry
+                        entry.Store(traceFileWriter);
+
+                        break;
+                    }
+
                 }
             }
         }
@@ -698,19 +726,19 @@ public class PinTracePreprocessor : PreprocessorStage
 
         /// <summary>
         /// The size of a memory access.
-        /// Used with: MemoryRead, MemoryWrite
+        /// Used with: MemoryRead, MemoryWrite, SourceInfo.
         /// </summary>
         public readonly short Param0;
 
         /// <summary>
         /// The address of the instruction triggering the trace entry creation, or the size of an allocation.
-        /// Used with: MemoryRead, MemoryWrite, Branch, HeapAllocSizeParameter, StackPointerInfo.
+        /// Used with: MemoryRead, MemoryWrite, Branch, HeapAllocSizeParameter, StackPointerInfo, SourceInfo.
         /// </summary>
         public readonly ulong Param1;
 
         /// <summary>
         /// The accessed/passed memory address.
-        /// Used with: MemoryRead, MemoryWrite, HeapAllocAddressReturn, HeapFreeAddressParameter, Branch, StackPointerInfo.
+        /// Used with: MemoryRead, MemoryWrite, HeapAllocAddressReturn, HeapFreeAddressParameter, Branch, StackPointerInfo, SourceInfo.
         /// </summary>
         public readonly ulong Param2;
     }
@@ -759,6 +787,11 @@ public class PinTracePreprocessor : PreprocessorStage
         /// A modification of the stack pointer.
         /// </summary>
         StackPointerModification = 8
+
+        /// <summary>
+        /// The source info for each trace entry
+        /// </summary>
+        SourceInfo = 9
     }
 
     /// <summary>
