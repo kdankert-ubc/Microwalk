@@ -862,16 +862,16 @@ public partial class ControlFlowLeakage : AnalysisStage
                 }
             }
 
-            else if(traceEntry.EntryType is TraceEntryTypes.SourceInfo) 
+            else if(traceEntry.EntryType is TraceEntryTypes.SourceInfo)
             {
 
                 /*
                  * Step 1: Extract source info data
                  */
 
-                uint16 col = 0;
-                uint64 line = 0;
-                string sourceName = "";
+                ushort col = 0;
+                ulong line = 0;
+                ulong sourceName = 0;
                 var info = (SourceInfo)traceEntry;
 
                 col = info.ColNum;
@@ -884,7 +884,7 @@ public partial class ControlFlowLeakage : AnalysisStage
                  * We don't split the tree ever since obtaining source info does not affect control flow.
                  */
 
-                sourceNode = new SourceInfoNode(col, line, sourceName);
+                var sourceNode = new SourceInfoNode(col, line, sourceName);
                 currentNode.Successors.Add(sourceNode);
                 ++successorIndex;
             }

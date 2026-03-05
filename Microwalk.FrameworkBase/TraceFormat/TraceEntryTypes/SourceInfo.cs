@@ -13,30 +13,30 @@ public class SourceInfo : ITraceEntry
 
     public void FromReader(IFastBinaryReader reader)
     {
-        ColNum = reader.ReadInt16();
+        ColNum = reader.ReadUInt16();
         LineNum = reader.ReadUInt64();
-        SourceName = reader.ReadString();
+        SourceName = reader.ReadUInt64();
     }
 
     public void Store(IFastBinaryWriter writer)
     {
         writer.WriteByte((byte)TraceEntryTypes.SourceInfo);
-        writer.WriteInt16(ColNum);
-        writer.WriteInt64(LineNum);
-        writer.WriteChars(SourceName.ToCharArray());
+        writer.WriteUInt16(ColNum);
+        writer.WriteUInt64(LineNum);
+        writer.WriteUInt64(SourceName);
     }
     /// <summary>
     /// The column number which this entry belongs to.
     /// </summary>
-    public int ColNum { get; set; }
+    public ushort ColNum { get; set; }
 
     /// <summary>
     /// The line number which this entry belongs to.
     /// </summary>
-    public int LineNum { get; set; }
+    public ulong LineNum { get; set; }
 
     /// <summary>
     /// The name of the file which this entry was extracted from.
     /// </summary>
-    public string SourceName { get; set; }
+    public ulong SourceName { get; set; }
 }

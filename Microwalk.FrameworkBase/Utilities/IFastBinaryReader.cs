@@ -37,6 +37,12 @@ public interface IFastBinaryReader
     short ReadInt16();
 
     /// <summary>
+    /// Reads a 16-bit unsigned integer from the buffer.
+    /// </summary>
+    /// <returns></returns>
+    ushort ReadUInt16();
+
+    /// <summary>
     /// Reads a 32-bit integer from the buffer.
     /// </summary>
     /// <returns></returns>

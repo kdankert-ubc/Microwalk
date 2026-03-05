@@ -85,6 +85,23 @@ public class FastBinaryBufferReader : IDisposable, IFastBinaryReader
     }
 
     /// <summary>
+    /// Reads a 16-bit unsigned integer from the buffer.
+    /// </summary>
+    /// <returns></returns>
+    public unsafe ushort ReadUInt16()
+    {
+        // Read and increase position
+        ushort val;
+        fixed(byte* buf = &Buffer.Span[Position])
+            if((Position & 0b1) == 0) // If the alignment is right, direct conversion is possible
+                val = *((ushort*)buf);
+            else
+                val = (ushort)((*buf) | (*(buf + 1) << 8)); // Little Endian
+        Position += 2;
+        return val;
+    }
+
+    /// <summary>
     /// Reads a 32-bit integer from the buffer.
     /// </summary>
     /// <returns></returns>

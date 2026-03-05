@@ -178,6 +178,26 @@ public class FastBinaryFileReader : IFastBinaryReader, IDisposable
     }
 
     /// <summary>
+    /// Reads a 16-bit unsigned integer from the buffer.
+    /// </summary>
+    /// <returns></returns>
+    public unsafe ushort ReadUInt16()
+    {
+        EnsureAvailable(2);
+
+        // Read and increase position
+        int chunkPos = Position - _chunkPosition;
+        ushort val;
+        fixed(byte* buf = &_chunk[chunkPos])
+            if((chunkPos & 0b1) == 0) // If the alignment is right, direct conversion is possible
+                val = *((ushort*)buf);
+            else
+                val = (ushort)((*buf) | (*(buf + 1) << 8)); // Little Endian
+        Position += 2;
+        return val;
+    }
+
+    /// <summary>
     /// Reads a 32-bit integer from the buffer.
     /// </summary>
     /// <returns></returns>

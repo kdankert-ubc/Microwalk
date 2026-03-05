@@ -579,13 +579,13 @@ public class PinTracePreprocessor : PreprocessorStage
 
                     case RawTraceEntryTypes.SourceInfo when !isPrefix:
                     {
-                        var col = rawTraceEntry.Param0;
-                        var line = rawTraceEntry.Param1;
-                        var sourceAtom = rawTraceEntry.Param2;
+                        var col = (ushort) rawTraceEntry.Param0;
+                        var line = (ulong) rawTraceEntry.Param1;
+                        var sourceAtom = (ulong) rawTraceEntry.Param2;
 
                         // TODO: parse temp file using sourceAtom to get filename.
                         // TODO: Figure out what the path is relative to the test.
-                        
+
                         // TODO: Delete debug statement later. Currently for testing.
                         Logger.LogWarningAsync($"{logPrefix} SourceInfo created: Col: {col}, Line: {line}, SourceAtom: {sourceAtom:x}").Wait();
 
@@ -595,7 +595,7 @@ public class PinTracePreprocessor : PreprocessorStage
                             // adjust
                             ColNum = col,
                             LineNum = line,
-                            SourceName = $"sourceName placeholder {sourceAtom}",
+                            SourceName = sourceAtom,
                         };
 
                         // Create entry
@@ -786,7 +786,7 @@ public class PinTracePreprocessor : PreprocessorStage
         /// <summary>
         /// A modification of the stack pointer.
         /// </summary>
-        StackPointerModification = 8
+        StackPointerModification = 8,
 
         /// <summary>
         /// The source info for each trace entry

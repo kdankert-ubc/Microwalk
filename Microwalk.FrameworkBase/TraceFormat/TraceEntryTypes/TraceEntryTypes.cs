@@ -38,5 +38,10 @@ public enum TraceEntryTypes : byte
     /// <summary>
     /// A stack allocation.
     /// </summary>
-    StackAllocation = 7
+    StackAllocation = 7,
+
+    /// <summary>
+    /// Debug information
+    /// </summary>
+    SourceInfo = 9
 };

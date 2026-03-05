@@ -202,7 +202,7 @@ public partial class ControlFlowLeakage
 
     private class SourceInfoNode : CallTreeNode
     {
-        public SourceInfoNode(ushort col, ulong line, string sourceName)
+        public SourceInfoNode(ushort col, ulong line, ulong sourceName)
         {
             ColNum = col;
             LineNum = line;
@@ -212,7 +212,7 @@ public partial class ControlFlowLeakage
         /// <summary>
         /// Column number.
         /// </summary>
-        public ulong ColNum { get; }
+        public ushort ColNum { get; }
 
         /// <summary>
         /// Line number.
@@ -222,7 +222,7 @@ public partial class ControlFlowLeakage
         /// <summary>
         /// Source File Name
         /// </summary>
-        public string SourceName { get; }
+        public ulong SourceName { get; }
     }
 
 }
