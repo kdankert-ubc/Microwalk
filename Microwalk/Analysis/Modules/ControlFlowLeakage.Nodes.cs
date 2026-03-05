@@ -199,4 +199,30 @@ public partial class ControlFlowLeakage
         /// </summary>
         public uint Size { get; }
     }
+
+    private class SourceInfoNode : CallTreeNode
+    {
+        public SourceInfoNode(ushort col, ulong line, string sourceName)
+        {
+            ColNum = col;
+            LineNum = line;
+            SourceName = sourceName;
+        }
+
+        /// <summary>
+        /// Column number.
+        /// </summary>
+        public ulong ColNum { get; }
+
+        /// <summary>
+        /// Line number.
+        /// </summary>
+        public ulong LineNum { get; }
+
+        /// <summary>
+        /// Source File Name
+        /// </summary>
+        public string SourceName { get; }
+    }
+
 }

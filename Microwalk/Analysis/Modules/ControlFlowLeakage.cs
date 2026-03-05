@@ -861,20 +861,22 @@ public partial class ControlFlowLeakage : AnalysisStage
                     }
                 }
             }
+
             else if(traceEntry.EntryType is TraceEntryTypes.SourceInfo) 
             {
+
                 /*
                  * Step 1: Extract source info data
                  */
 
-                uint col = 0;
-                uint line = 0;
+                uint16 col = 0;
+                uint64 line = 0;
                 string sourceName = "";
                 var info = (SourceInfo)traceEntry;
 
-                col = alloc.ColNum;
-                line = alloc.LineNum;
-                sourceName = alloc.SourceName;
+                col = info.ColNum;
+                line = info.LineNum;
+                sourceName = info.SourceName;
 
                 /*
                  * Step 2: Add new node for each SourceInfo trace entry.
@@ -882,8 +884,9 @@ public partial class ControlFlowLeakage : AnalysisStage
                  * We don't split the tree ever since obtaining source info does not affect control flow.
                  */
 
-
-                break;
+                sourceNode = new SourceInfoNode(col, line, sourceName);
+                currentNode.Successors.Add(sourceNode);
+                ++successorIndex;
             }
         }
     }
@@ -1156,6 +1159,12 @@ public partial class ControlFlowLeakage : AnalysisStage
                                 interestingCallStackIds.Add(entry.CallStackNode.Id);
                         }
                     }
+                    else if(_dumpCallTree && successorNode is SourceInfoNode sourceNode)
+                    {
+                        // Print node
+                        await callTreeDumpWriter.WriteLineAsync($"{indentation}    #source {sourceNode.ColNum}:{sourceNode.LineNum}:{sourceNode.SourceName}");
+                    }
+
                 }
 
                 // Done, move to split successors
