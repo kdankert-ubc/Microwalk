@@ -30,6 +30,8 @@ const importStatements = {
 }
 
 const runtimeMapping = {
+    script: importStatements.cjs("runtime-nodejs.cjs"),
+    module: importStatements.esm("runtime-nodejs.cjs"),
     "nodejs-script": importStatements.cjs("runtime-nodejs.cjs"),
     "nodejs-module": importStatements.esm("runtime-nodejs.cjs"),
     quickjs: importStatements.esm("runtime-quickjs.mjs"),
