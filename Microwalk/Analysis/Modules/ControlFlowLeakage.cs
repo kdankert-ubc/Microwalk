@@ -1190,7 +1190,7 @@ public partial class ControlFlowLeakage : AnalysisStage
                     else if(_dumpCallTree && successorNode is SourceInfoNode sourceNode)
                     {
                         // Print node
-                        await callTreeDumpWriter.WriteLineAsync($"{indentation}    #source {sourceNode.ColNum}:{sourceNode.LineNum}:{sourceNode.SourceName}");
+                        await callTreeDumpWriter.WriteLineAsync($"{indentation}    #source {sourceNode.ColNum}:{sourceNode.LineNum}:{_sourceNameMappings[sourceNode.SourceName]}");
                     }
 
                 }
@@ -1507,7 +1507,25 @@ public partial class ControlFlowLeakage : AnalysisStage
             _deferredMapFileTasks.Clear();
         }
 
-        // TODO: LOAD SOURCE INFO ENTRY
+        // Fills source info name to JSAtom mapping
+        string sourceInfoMappingPath = moduleOptions.GetChildNodeOrDefault("source-info-mappings")?.AsString() ?? throw new ConfigurationException("Missing file for source info to JSAtom mappings.");
+
+        if(!File.Exists(sourceInfoMappingPath))
+            throw new ConfigurationException("File not found for source info to JSAtom mappings.");
+
+        foreach(var line in await File.ReadAllLinesAsync(sourceInfoMappingPath))
+        {
+            if(string.IsNullOrWhiteSpace(line))
+                continue;
+
+            int colonIndex = line.IndexOf(':');
+            if(colonIndex != -1 && ulong.TryParse(line.AsSpan(0, colonIndex), out ulong id))
+            {
+                string fileName = line.Substring(colonIndex + 1);
+                
+                _sourceNameMappings[id] = fileName;
+            }
+        }
 
         // Dump internal data?
         _dumpCallTree = moduleOptions.GetChildNodeOrDefault("dump-call-tree")?.AsBoolean() ?? false;
