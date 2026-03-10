@@ -97,6 +97,13 @@ public class PinTraceGenerator : TraceStage
         else if(wrapperArgsNode != null)
             throw new ConfigurationException("Wrapper arguments node has wrong type (should be a list node).");
 
+        List<string> customMemoryFunctions = new();
+        var customMemoryFunctionsNode = moduleOptions.GetChildNodeOrDefault("custom-memory-functions");
+        if(customMemoryFunctionsNode is ListNode customMemoryFunctionsListNode)
+            customMemoryFunctions.AddRange(customMemoryFunctionsListNode.Children.Select(arg => arg.AsString()).OfType<string>());
+        else if(customMemoryFunctionsNode != null)
+            throw new ConfigurationException("Custom memory functions node has wrong type (should be a list node).");
+
         // Prepare argument list
         var pinArgs = new List<string>
         {
@@ -120,7 +127,14 @@ public class PinTraceGenerator : TraceStage
 
         pinArgs.Add("-c");
         pinArgs.Add($"{cpuModelId}");
-        pinArgs.Add("--");           
+
+        foreach(var customMemoryFunction in customMemoryFunctions)
+        {
+            pinArgs.Add("-m");
+            pinArgs.Add(customMemoryFunction);
+        }
+
+        pinArgs.Add("--");
         pinArgs.Add(wrapperPath);
         pinArgs.AddRange(wrapperArgs);
 

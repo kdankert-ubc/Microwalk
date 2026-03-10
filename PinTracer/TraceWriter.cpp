@@ -8,14 +8,17 @@
 
 #include "FilterEntry.h"
 
+/* GLOBALS */
+std::vector<FilterEntry> filter;
 
 /* STATIC VARIABLES */
 
+std::map<ADDRINT, std::string> TraceWriter::_alias;
 bool TraceWriter::_prefixMode;
 std::ofstream TraceWriter::_prefixDataFileStream;
+std::ofstream TraceWriter::_aliasFileStream("alias.txt");
+
 bool TraceWriter::_sawFirstReturn;
-FilterEntry *TraceWriter::_filterAddr = nullptr;
-size_t TraceWriter::_filterAddrSize = 0;
 
 /* TYPES */
 
@@ -32,6 +35,7 @@ TraceWriter::TraceWriter(const std::string& filenamePrefix)
 TraceWriter::~TraceWriter()
 {
     // Close file stream
+    _aliasFileStream.close();
     _outputFileStream.close();
 }
 
@@ -141,88 +145,13 @@ void TraceWriter::WriteImageLoadData(int interesting, uint64_t startAddress, uin
     _prefixDataFileStream << "i\t" << interesting << "\t" << std::hex << startAddress << "\t" << std::hex << endAddress << "\t" << name << std::endl;
 }
 
-void TraceWriter::SetFilter(FilterEntry *addr, size_t size)
-{
-    std::cerr << "Set filter, size: " << std::dec << size << std::endl;
-    _filterAddr = addr;
-    _filterAddrSize = size;
-
-    for (size_t i = 0; i < _filterAddrSize; ++i)
-    {
-        FilterEntry &entry = _filterAddr[i];
-
-        if ((entry.originStart == 0 || entry.originEnd == 0) && (entry.targetStart == 0 || entry.targetEnd == 0))
-            continue;
-
-        bool whitelisted = FilterTypeMatch(FilterTypeWhiteList, entry.type);
-
-        bool cf = FilterTypeMatch(FilterTypeControlFlow, entry.type);
-        bool da = FilterTypeMatch(FilterTypeDataAccess, entry.type);
-
-        bool jump = FilterTypeMatch(FilterTypeJump, entry.type);
-        bool call = FilterTypeMatch(FilterTypeCall, entry.type);
-        bool ret = FilterTypeMatch(FilterTypeReturn, entry.type);
-        bool linearize = FilterTypeMatch(FilterTypeLinearize, entry.type);
-
-        bool read = FilterTypeMatch(FilterTypeRead, entry.type);
-        bool write = FilterTypeMatch(FilterTypeWrite, entry.type);
-
-        std::cerr << "Filter entry: ";
-        if (entry.originStart && entry.originEnd)
-            std::cerr << (void *) entry.originStart << " - " << (void *) entry.originEnd << " -> ";
-        else
-            std::cerr << "? -> ";
-
-        if (entry.targetStart && entry.targetEnd)
-            std::cerr << (void *) entry.targetStart << " - " << (void *) entry.targetEnd << " ";
-        else
-            std::cerr << "? ";
-
-        std::cerr << (whitelisted ? "(+)" : "(-)") << " ";
-        if (cf) {
-            std::cerr << "CF(";
-            if (jump)
-                std::cerr << "jump";
-            if (call) {
-                if (jump)
-                    std::cerr << ", ";
-                std::cerr << "call";
-                if (linearize)
-                    std::cerr << " -> linearize";
-            }
-            if (ret) {
-                if (jump || call)
-                        std::cerr << ", ";
-                    std::cerr << "return";
-            }
-            std::cerr << ")";
-        }
-
-        if (da) {
-            if (cf)
-                std::cerr << " ";
-            std::cerr << "DA(";
-            if (read)
-                std::cerr << "read";
-            if (write) {
-                if (read)
-                        std::cerr << ", ";
-                    std::cerr << "write";
-            }
-            std::cerr << ")";
-        }
-
-        std::cerr << std::endl;
-    }
-}
-
 bool TraceWriter::IsWhitelisted(TraceEntryTypes type, ADDRINT instr, ADDRINT addr, UINT8 *flag)
 {
-    if (_filterAddrSize <= 0)
+    if (filter.size() == 0)
         return true;
 
-    for (size_t i = 0; i < _filterAddrSize; ++i) {
-        FilterEntry &entry = _filterAddr[i];
+    for (size_t i = 0; i < filter.size(); ++i) {
+        FilterEntry &entry = filter[i];
 
         if ((entry.originStart == 0 || entry.originEnd == 0) && (entry.targetStart == 0 || entry.targetEnd == 0))
             continue;
@@ -290,7 +219,7 @@ TraceEntry* TraceWriter::CheckBufferAndStore(TraceWriter *traceWriter, TraceEntr
 
 TraceEntry* TraceWriter::InsertMemoryReadEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT instructionAddress, ADDRINT memoryAddress, UINT32 size)
 {
-    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::MemoryRead, instructionAddress, memoryAddress, nullptr))
+    if (!IsWhitelisted(TraceEntryTypes::MemoryRead, instructionAddress, memoryAddress, nullptr))
         return nextEntry;
 
     // Create entry
@@ -304,7 +233,7 @@ TraceEntry* TraceWriter::InsertMemoryReadEntry(TraceWriter *traceWriter, TraceEn
 
 TraceEntry* TraceWriter::InsertMemoryWriteEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT instructionAddress, ADDRINT memoryAddress, UINT32 size)
 {
-    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::MemoryWrite, instructionAddress, memoryAddress, nullptr))
+    if (!IsWhitelisted(TraceEntryTypes::MemoryWrite, instructionAddress, memoryAddress, nullptr))
         return nextEntry;
 
     // Create entry
@@ -319,7 +248,7 @@ TraceEntry* TraceWriter::InsertMemoryWriteEntry(TraceWriter *traceWriter, TraceE
 TraceEntry* TraceWriter::InsertHeapAllocSizeParameterEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT64 size)
 {
     // Check whether given entry pointer is valid (we might be in a non-instrumented thread)
-    if(nextEntry == nullptr || _filterAddrSize > 0)
+    if(nextEntry == nullptr)
         return nextEntry;
 
     // Create entry
@@ -337,7 +266,7 @@ TraceEntry* TraceWriter::InsertCallocSizeParameterEntry(TraceWriter *traceWriter
 TraceEntry* TraceWriter::InsertHeapAllocAddressReturnEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT memoryAddress)
 {
     // Check whether given entry pointer is valid (we might be in a non-instrumented thread)
-    if(nextEntry == nullptr || _filterAddrSize > 0)
+    if(nextEntry == nullptr)
         return nextEntry;
 
     // Create entry
@@ -350,7 +279,7 @@ TraceEntry* TraceWriter::InsertHeapAllocAddressReturnEntry(TraceWriter *traceWri
 TraceEntry* TraceWriter::InsertHeapFreeAddressParameterEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT memoryAddress)
 {
     // Check whether given entry pointer is valid (we might be in a non-instrumented thread)
-    if(nextEntry == nullptr || _filterAddrSize > 0)
+    if(nextEntry == nullptr)
         return nextEntry;
 
     // Create entry
@@ -362,9 +291,6 @@ TraceEntry* TraceWriter::InsertHeapFreeAddressParameterEntry(TraceWriter *traceW
 
 TraceEntry* TraceWriter::InsertStackPointerModificationEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT instructionAddress, ADDRINT newStackPointer, UINT8 flags)
 {
-    if (_filterAddrSize > 0)
-        return nextEntry;
-
     // Create entry
     nextEntry->Type = TraceEntryTypes::StackPointerModification;
     nextEntry->Flag = flags;
@@ -376,7 +302,7 @@ TraceEntry* TraceWriter::InsertStackPointerModificationEntry(TraceWriter *traceW
 
 TraceEntry* TraceWriter::InsertBranchEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, ADDRINT sourceAddress, ADDRINT targetAddress, UINT8 taken, UINT8 type)
 {
-    if (_filterAddrSize > 0 && !IsWhitelisted(TraceEntryTypes::Branch, sourceAddress, targetAddress, &type))
+    if (!IsWhitelisted(TraceEntryTypes::Branch, sourceAddress, targetAddress, &type))
         return nextEntry;
 
     // Create entry
@@ -428,4 +354,19 @@ bool ImageData::ContainsBasicBlock(BBL basicBlock) const
 bool ImageData::IsInteresting() const
 {
     return _interesting;
+}
+
+void TraceWriter::AddAlias(ADDRINT addr, char *name)
+{
+    bool inserted = _alias.insert(std::pair<ADDRINT, std::string>(addr, name)).second;
+    if (!inserted) {
+        return;
+    }
+
+    PIN_LockClient();
+    IMG img = IMG_FindByAddress(addr);
+    PIN_UnlockClient();
+    if (IMG_Valid(img)) {
+        _aliasFileStream << std::hex << std::setw(8) << std::setfill('0') << (addr - IMG_LowAddress(img)) << " " << name << std::endl;
+    }
 }

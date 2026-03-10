@@ -1,3 +1,6 @@
+#include "FilterEntry.h"
+#include <iostream>
+#include <string>
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "bugprone-reserved-identifier"
 /*
@@ -33,6 +36,8 @@ KNOB<UINT64> KnobFixedRandomNumbers(KNOB_MODE_WRITEONCE, "pintool", "r", "841534
 
 // Enable stack allocation tracking.
 KNOB<int> KnobEnableStackAllocationTracking(KNOB_MODE_WRITEONCE, "pintool", "s", "0", "enable stack allocation tracking");
+
+KNOB<std::string> KnobCustomMemoryFunctions(KNOB_MODE_APPEND, "pintool", "m", "", "specify custom memory allocation functions for instrumentation: type:name:a0:a1. type is one of malloc, calloc, realloc, free, and name is the function name, a0:a1 are the index of arguments passed to the custom function that represent the paramaters passed to the libc equivalents. Specifying custom memory functions disables automatic instrumentation of libc memory functions.");
 
 // The names of interesting images, parsed from the command line option.
 std::vector<std::string> _interestingImages;
@@ -92,7 +97,11 @@ VOID StartAllocationTracking(TraceEntry *nextEntry);
 VOID TrackAllocationCall();
 TraceEntry* TrackAllocationReturn(TraceWriter *traceWriter, TraceEntry *nextEntry, ADDRINT returnValue);
 void ChangeRandomNumber(ADDRINT* outputReg);
-
+void SetFilter(FilterEntry* addr, size_t size);
+void AddFilter(FilterEntry* entry);
+void RemoveFilter(FilterType type, ADDRINT origin, ADDRINT target);
+void PrintFilter();
+void AddAlias(ADDRINT addr, char *name);
 
 /* FUNCTIONS */
 
@@ -476,6 +485,80 @@ VOID ThreadFini(THREADID tid, const CONTEXT* ctxt, [[maybe_unused]] INT32 code, 
 	delete traceWriter;
 }
 
+#ifdef USE_LEGACY_ALLOC_RETURN_TRACKING
+#define InstrumentMemoryHeapAllocReturnAddress(...) do { \
+    RTN_InsertCall(rtn, IPOINT_AFTER, AFUNPTR(TraceWriter::InsertHeapAllocAddressReturnEntry), \
+        IARG_REG_VALUE, _traceWriterReg, \
+		IARG_REG_VALUE, _nextBufferEntryReg, \
+		__VA_ARGS__, \
+		IARG_RETURN_REGS, _nextBufferEntryReg, \
+		IARG_END); \
+} while (0)
+#else
+#define InstrumentMemoryHeapAllocReturnAddress(...) do { \
+    RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(StartAllocationTracking), \
+        IARG_REG_VALUE, _nextBufferEntryReg, \
+        IARG_END); \
+} while (0)
+#endif
+
+#define InstrumentMalloc(fn, size_loc, ...) do { \
+    RTN rtn = RTN_FindByName(img, fn); \
+	if(RTN_Valid(rtn)) \
+	{ \
+		RTN_Open(rtn); \
+		RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertHeapAllocSizeParameterEntry), \
+            IARG_REG_VALUE, _traceWriterReg, \
+			IARG_REG_VALUE, _nextBufferEntryReg, \
+			IARG_FUNCARG_ENTRYPOINT_VALUE, size_loc, \
+			IARG_RETURN_REGS, _nextBufferEntryReg, \
+			IARG_END); \
+		InstrumentMemoryHeapAllocReturnAddress(__VA_ARGS__); \
+		RTN_Close(rtn); \
+		std::cerr << "    " << fn << "() instrumented." << std::endl; \
+	} else { \
+		std::cerr << "    " << fn << "() not found." << std::endl; \
+	} \
+} while (0)
+
+#define InstrumentCalloc(fn, num_loc, size_loc, ...) do { \
+    RTN rtn = RTN_FindByName(img, fn); \
+	if(RTN_Valid(rtn)) \
+	{ \
+		RTN_Open(rtn); \
+		RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertCallocSizeParameterEntry), \
+            IARG_REG_VALUE, _traceWriterReg, \
+			IARG_REG_VALUE, _nextBufferEntryReg, \
+			IARG_FUNCARG_ENTRYPOINT_VALUE, num_loc, \
+			IARG_FUNCARG_ENTRYPOINT_VALUE, size_loc, \
+			IARG_RETURN_REGS, _nextBufferEntryReg, \
+			IARG_END); \
+		InstrumentMemoryHeapAllocReturnAddress(__VA_ARGS__); \
+		RTN_Close(rtn); \
+		std::cerr << "    " << fn << "() instrumented." << std::endl; \
+	} else { \
+		std::cerr << "    " << fn << "() not found." << std::endl; \
+	} \
+} while (0)
+
+#define InstrumentFree(fn, ptr_loc) do { \
+    RTN rtn = RTN_FindByName(img, fn); \
+	if(RTN_Valid(rtn)) \
+	{ \
+		RTN_Open(rtn); \
+		RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertHeapFreeAddressParameterEntry), \
+            IARG_REG_VALUE, _traceWriterReg, \
+			IARG_REG_VALUE, _nextBufferEntryReg, \
+			IARG_FUNCARG_ENTRYPOINT_VALUE, ptr_loc, \
+			IARG_RETURN_REGS, _nextBufferEntryReg, \
+			IARG_END); \
+		RTN_Close(rtn); \
+		std::cerr << "    " << fn << "() instrumented." << std::endl; \
+	} else { \
+		std::cerr << "    " << fn << "() not found." << std::endl; \
+	} \
+} while (0)
+
 // [Callback] Instruments the memory allocation/deallocation functions.
 VOID InstrumentImage(IMG img, [[maybe_unused]] VOID* v)
 {
@@ -568,13 +651,64 @@ VOID InstrumentImage(IMG img, [[maybe_unused]] VOID* v)
 	RTN notifyFilterRtn = RTN_FindByName(img, "PinNotifyFilter");
 	if (RTN_Valid(notifyFilterRtn))
 	{
-		// Save filter
 		RTN_Open(notifyFilterRtn);
-		RTN_InsertCall(notifyFilterRtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::SetFilter),
+		RTN_InsertCall(notifyFilterRtn, IPOINT_BEFORE, AFUNPTR(SetFilter),
 			IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
 			IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
 			IARG_END);
 		RTN_Close(notifyFilterRtn);
+
+		std::cerr << "    PinNotifyFilter() instrumented." << std::endl;
+	}
+
+	RTN notifyFilterAddRtn = RTN_FindByName(img, "PinNotifyFilterAdd");
+	if (RTN_Valid(notifyFilterAddRtn))
+	{
+		RTN_Open(notifyFilterAddRtn);
+		RTN_InsertCall(notifyFilterAddRtn, IPOINT_BEFORE, AFUNPTR(AddFilter),
+			IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+			IARG_END);
+		RTN_Close(notifyFilterAddRtn);
+
+		std::cerr << "    PinNotifyFilterAdd() instrumented." << std::endl;
+	}
+
+	RTN notifyFilterRemoveRtn = RTN_FindByName(img, "PinNotifyFilterRemove");
+	if (RTN_Valid(notifyFilterRemoveRtn))
+	{
+		RTN_Open(notifyFilterRemoveRtn);
+		RTN_InsertCall(notifyFilterRemoveRtn, IPOINT_BEFORE, AFUNPTR(RemoveFilter),
+			IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+			IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+			IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
+			IARG_END);
+		RTN_Close(notifyFilterRemoveRtn);
+
+		std::cerr << "    PinNotifyFilterRemove() instrumented." << std::endl;
+	}
+
+	RTN notifyFilterPrintRtn = RTN_FindByName(img, "PinNotifyFilterPrint");
+	if (RTN_Valid(notifyFilterPrintRtn))
+	{
+		RTN_Open(notifyFilterPrintRtn);
+		RTN_InsertCall(notifyFilterPrintRtn, IPOINT_BEFORE, AFUNPTR(PrintFilter),
+			IARG_END);
+		RTN_Close(notifyFilterPrintRtn);
+
+		std::cerr << "    PinNotifyFilterPrint() instrumented." << std::endl;
+	}
+
+	RTN notifyAliasRtn = RTN_FindByName(img, "PinNotifyAlias");
+	if (RTN_Valid(notifyAliasRtn))
+	{
+		RTN_Open(notifyAliasRtn);
+		RTN_InsertCall(notifyAliasRtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::AddAlias),
+			IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
+			IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
+			IARG_END);
+		RTN_Close(notifyAliasRtn);
+
+		std::cerr << "    PinNotifyAlias() instrumented." << std::endl;
 	}
 
 	// Find the Pin allocation notification function
@@ -600,169 +734,73 @@ VOID InstrumentImage(IMG img, [[maybe_unused]] VOID* v)
 		std::cerr << "    PinNotifyAllocation() instrumented." << std::endl;
 	}
 
-	// Find allocation and free functions to log allocation sizes and addresses
-#if defined(_WIN32)
-	RTN mallocRtn = RTN_FindByName(img, "RtlAllocateHeap");
-	if(RTN_Valid(mallocRtn))
+	if (KnobCustomMemoryFunctions.NumberOfValues() == 0)
 	{
-		// Trace size parameter
-		RTN_Open(mallocRtn);
-		RTN_InsertCall(mallocRtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertHeapAllocSizeParameterEntry),
-            IARG_REG_VALUE, _traceWriterReg,
-			IARG_REG_VALUE, _nextBufferEntryReg,
-			IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
-			IARG_RETURN_REGS, _nextBufferEntryReg,
-			IARG_END);
-
-		// Trace returned address
-#ifdef USE_LEGACY_ALLOC_RETURN_TRACKING
-		RTN_InsertCall(mallocRtn, IPOINT_AFTER, AFUNPTR(TraceWriter::InsertHeapAllocAddressReturnEntry),
-            IARG_REG_VALUE, _traceWriterReg,
-			IARG_REG_VALUE, _nextBufferEntryReg,
-			IARG_REG_VALUE, REG_RAX,
-			IARG_RETURN_REGS, _nextBufferEntryReg,
-			IARG_END);
+		// Find allocation and free functions to log allocation sizes and addresses
+ #if defined(_WIN32)
+        InstrumentMalloc("RtlAllocateHeap", 2, IARG_REG_VALUE, REG_RAX);
+        InstrumentFree("RtlFreeHeap", 2);
 #else
-        RTN_InsertCall(mallocRtn, IPOINT_BEFORE, AFUNPTR(StartAllocationTracking),
-           IARG_REG_VALUE, _nextBufferEntryReg,
-           IARG_END);
-#endif
-
-		RTN_Close(mallocRtn);
-
-		std::cerr << "    RtlAllocateHeap() instrumented." << std::endl;
-	}
-
-	RTN freeRtn = RTN_FindByName(img, "RtlFreeHeap");
-	if(RTN_Valid(freeRtn))
-	{
-		// Trace address parameter
-		RTN_Open(freeRtn);
-		RTN_InsertCall(freeRtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertHeapFreeAddressParameterEntry),
-            IARG_REG_VALUE, _traceWriterReg,
-			IARG_REG_VALUE, _nextBufferEntryReg,
-			IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
-			IARG_RETURN_REGS, _nextBufferEntryReg,
-			IARG_END);
-		RTN_Close(freeRtn);
-
-		std::cerr << "    RtlFreeHeap() instrumented." << std::endl;
-	}
-#else
-	// Only instrument allocation methods from libc
-	if(imageName.find("libc.so") != std::string::npos)
-	{
-		RTN mallocRtn = RTN_FindByName(img, "malloc");
-		if(RTN_Valid(mallocRtn))
+		// Only instrument allocation methods from libc
+		if(imageName.find("libc.so") != std::string::npos)
 		{
-			// Trace size parameter
-			RTN_Open(mallocRtn);
-			RTN_InsertCall(mallocRtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertHeapAllocSizeParameterEntry),
-                IARG_REG_VALUE, _traceWriterReg,
-				IARG_REG_VALUE, _nextBufferEntryReg,
-				IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
-				IARG_RETURN_REGS, _nextBufferEntryReg,
-				IARG_END);
-
-			// Trace returned address
-#ifdef USE_LEGACY_ALLOC_RETURN_TRACKING
-			RTN_InsertCall(mallocRtn, IPOINT_AFTER, AFUNPTR(TraceWriter::InsertHeapAllocAddressReturnEntry),
-                IARG_REG_VALUE, _traceWriterReg,
-				IARG_REG_VALUE, _nextBufferEntryReg,
-				IARG_FUNCRET_EXITPOINT_VALUE,
-				IARG_RETURN_REGS, _nextBufferEntryReg,
-				IARG_END);
-#else
-            RTN_InsertCall(mallocRtn, IPOINT_BEFORE, AFUNPTR(StartAllocationTracking),
-               IARG_REG_VALUE, _nextBufferEntryReg,
-               IARG_END);
-#endif
-
-			RTN_Close(mallocRtn);
-
-			std::cerr << "    malloc() instrumented." << std::endl;
+		    InstrumentMalloc("malloc", 0, IARG_FUNCRET_EXITPOINT_VALUE);
+		    InstrumentCalloc("calloc", 0, 1, IARG_FUNCRET_EXITPOINT_VALUE);
+		    InstrumentMalloc("realloc", 1, IARG_FUNCRET_EXITPOINT_VALUE);
+		    InstrumentFree("free", 0);
 		}
-
-		RTN callocRtn = RTN_FindByName(img, "calloc");
-		if(RTN_Valid(callocRtn))
-		{
-			// Trace size parameter
-			RTN_Open(callocRtn);
-			RTN_InsertCall(callocRtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertCallocSizeParameterEntry),
-                IARG_REG_VALUE, _traceWriterReg,
-				IARG_REG_VALUE, _nextBufferEntryReg,
-				IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
-				IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
-				IARG_RETURN_REGS, _nextBufferEntryReg,
-				IARG_END);
-
-			// Trace returned address
-#ifdef USE_LEGACY_ALLOC_RETURN_TRACKING
-			RTN_InsertCall(callocRtn, IPOINT_AFTER, AFUNPTR(TraceWriter::InsertHeapAllocAddressReturnEntry),
-                IARG_REG_VALUE, _traceWriterReg,
-				IARG_REG_VALUE, _nextBufferEntryReg,
-				IARG_FUNCRET_EXITPOINT_VALUE,
-				IARG_RETURN_REGS, _nextBufferEntryReg,
-				IARG_END);
-#else
-            RTN_InsertCall(callocRtn, IPOINT_BEFORE, AFUNPTR(StartAllocationTracking),
-               IARG_REG_VALUE, _nextBufferEntryReg,
-               IARG_END);
 #endif
+	} else {
+	    std::cerr << "    disabling libc memory function instrumentation" << std::endl;
 
-			RTN_Close(callocRtn);
-
-			std::cerr << "    calloc() instrumented." << std::endl;
-		}
-
-		RTN reallocRtn = RTN_FindByName(img, "realloc");
-		if(RTN_Valid(reallocRtn))
+		for (UINT32 i = 0; i < KnobCustomMemoryFunctions.NumberOfValues(); ++i)
 		{
-			// Trace size parameter
-			RTN_Open(reallocRtn);
-			RTN_InsertCall(reallocRtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertHeapAllocSizeParameterEntry),
-                IARG_REG_VALUE, _traceWriterReg,
-				IARG_REG_VALUE, _nextBufferEntryReg,
-				IARG_FUNCARG_ENTRYPOINT_VALUE, 1,
-				IARG_RETURN_REGS, _nextBufferEntryReg,
-				IARG_END);
+			std::string cfg = KnobCustomMemoryFunctions.Value(i);
 
-			// Trace returned address
-#ifdef USE_LEGACY_ALLOC_RETURN_TRACKING
-			RTN_InsertCall(reallocRtn, IPOINT_AFTER, AFUNPTR(TraceWriter::InsertHeapAllocAddressReturnEntry),
-                IARG_REG_VALUE, _traceWriterReg,
-				IARG_REG_VALUE, _nextBufferEntryReg,
-				IARG_FUNCRET_EXITPOINT_VALUE,
-				IARG_RETURN_REGS, _nextBufferEntryReg,
-				IARG_END);
-#else
-            RTN_InsertCall(reallocRtn, IPOINT_BEFORE, AFUNPTR(StartAllocationTracking),
-               IARG_REG_VALUE, _nextBufferEntryReg,
-               IARG_END);
-#endif
+			std::string s;
+			std::vector<std::string> parts;
+			std::istringstream iss(cfg);
+			while (std::getline(iss, s, ':'))
+			{
+                s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+                    return !std::isspace(ch);
+                }));
+                s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+                    return !std::isspace(ch);
+                }).base(), s.end());
+				parts.push_back(s);
+			}
 
-			RTN_Close(reallocRtn);
+			if (parts.size() < 3)
+			{
+				std::cerr << "    invalid custom memory function format, requires at least 3 parts: " << cfg << std::endl;
+				continue;
+			}
 
-			std::cerr << "    realloc() instrumented." << std::endl;
-		}
+			std::string type = parts[0];
+			std::string fn = parts[1];
+			int a0 = std::stoi(parts[2]);
 
-		RTN freeRtn = RTN_FindByName(img, "free");
-		if(RTN_Valid(freeRtn))
-		{
-			// Trace address parameter
-			RTN_Open(freeRtn);
-			RTN_InsertCall(freeRtn, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertHeapFreeAddressParameterEntry),
-                IARG_REG_VALUE, _traceWriterReg,
-				IARG_REG_VALUE, _nextBufferEntryReg,
-				IARG_FUNCARG_ENTRYPOINT_VALUE, 0,
-				IARG_RETURN_REGS, _nextBufferEntryReg,
-				IARG_END);
-			RTN_Close(freeRtn);
+			if ((type == "calloc" || type == "realloc") && parts.size() < 4) {
+			    std::cerr << "    invalid custom memory function format, calloc and realloc require 2 arguments: " << cfg << std::endl;
+				continue;
+			}
 
-			std::cerr << "    free() instrumented." << std::endl;
+			int a1 = parts.size() > 3 ? std::stoi(parts[3]) : 0;
+
+			if (type == "malloc") {
+			    InstrumentMalloc(fn.c_str(), a0, IARG_FUNCRET_EXITPOINT_VALUE);
+			} else if (type == "calloc") {
+			    InstrumentCalloc(fn.c_str(), a0, a1, IARG_FUNCRET_EXITPOINT_VALUE);
+			} else if (type == "realloc") {
+			    InstrumentMalloc(fn.c_str(), a0, a1, IARG_FUNCRET_EXITPOINT_VALUE);
+			} else if (type == "free") {
+			    InstrumentFree(fn.c_str(), a0);
+			} else {
+			    std::cerr << "    invalid custom memory function type: " << type << std::endl;
+			}
 		}
 	}
-#endif
 }
 
 // Handles the beginning of a testcase.
@@ -832,4 +870,95 @@ void ChangeRandomNumber(ADDRINT* outputReg)
 {
 	*outputReg = static_cast<ADDRINT>(_fixedRandomNumber);
 }
+
+void PrintFilter() {
+    for (const auto& entry : filter)
+    {
+        bool whitelisted = FilterTypeMatch(FilterTypeWhiteList, entry.type);
+
+        bool cf = FilterTypeMatch(FilterTypeControlFlow, entry.type);
+        bool da = FilterTypeMatch(FilterTypeDataAccess, entry.type);
+
+        bool jump = FilterTypeMatch(FilterTypeJump, entry.type);
+        bool call = FilterTypeMatch(FilterTypeCall, entry.type);
+        bool ret = FilterTypeMatch(FilterTypeReturn, entry.type);
+        bool linearize = FilterTypeMatch(FilterTypeLinearize, entry.type);
+
+        bool read = FilterTypeMatch(FilterTypeRead, entry.type);
+        bool write = FilterTypeMatch(FilterTypeWrite, entry.type);
+
+        std::cerr << "Filter entry: ";
+        if (entry.originStart && entry.originEnd)
+            std::cerr << (void *) entry.originStart << " - " << (void *) entry.originEnd << " -> ";
+        else
+            std::cerr << "? -> ";
+
+        if (entry.targetStart && entry.targetEnd)
+            std::cerr << (void *) entry.targetStart << " - " << (void *) entry.targetEnd << " ";
+        else
+            std::cerr << "? ";
+
+        std::cerr << (whitelisted ? "(+)" : "(-)") << " ";
+        if (cf) {
+            std::cerr << "CF(";
+            if (jump)
+                std::cerr << "jump";
+            if (call) {
+                if (jump)
+                    std::cerr << ", ";
+                std::cerr << "call";
+                if (linearize)
+                    std::cerr << " -> linearize";
+            }
+            if (ret) {
+                if (jump || call)
+                        std::cerr << ", ";
+                    std::cerr << "return";
+            }
+            std::cerr << ")";
+        }
+
+        if (da) {
+            if (cf)
+                std::cerr << " ";
+            std::cerr << "DA(";
+            if (read)
+                std::cerr << "read";
+            if (write) {
+                if (read)
+                        std::cerr << ", ";
+                    std::cerr << "write";
+            }
+            std::cerr << ")";
+        }
+
+        std::cerr << std::endl;
+    }
+}
+
+void SetFilter(FilterEntry *addr, size_t size)
+{
+    for(size_t i = 0; i < size; ++i) {
+        if ((addr[i].originStart == 0 || addr[i].originEnd == 0) && (addr[i].targetStart == 0 || addr[i].targetEnd == 0))
+            continue;
+        filter.push_back(addr[i]);
+    }
+}
+
+void AddFilter(FilterEntry *entry)
+{
+    if ((entry->originStart == 0 || entry->originEnd == 0) && (entry->targetStart == 0 || entry->targetEnd == 0))
+        return;
+    filter.push_back(*entry);
+}
+
+void RemoveFilter(FilterType type, ADDRINT origin, ADDRINT target)
+{
+    filter.erase(std::remove_if(filter.begin(), filter.end(), [&](const FilterEntry& entry) {
+        return FilterTypeMatch(type, entry.type) &&
+            (origin == 0 || (entry.originStart <= origin && origin <= entry.originEnd)) &&
+            (target == 0 || (entry.targetStart <= target && target <= entry.targetEnd));
+    }), filter.end());
+}
+
 #pragma clang diagnostic pop
