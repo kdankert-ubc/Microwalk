@@ -250,6 +250,14 @@ internal class TraceDumper : AnalysisStage
 
                     break;
                 }
+
+                case TraceEntryTypes.SourceInfo:
+                {
+                    // Print source info entry
+                    var sourceEntry = (SourceInfo)entry;
+                    await writer.WriteLineAsync($"{entryPrefix}SourceInfo: {sourceEntry.ColNum}:{sourceEntry.LineNum}:{sourceEntry.SourceName}");
+                    break;
+                }
             }
 
             // Next entry

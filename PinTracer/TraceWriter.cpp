@@ -88,14 +88,14 @@ void TraceWriter::WriteBufferToFile(TraceEntry* end)
 void TraceWriter::WriteMapToFile()
 {
     std::stringstream filenameStream;
-    filenameStream << _outputFilenamePrefix << "map" << ".temp";
+    filenameStream << _outputFilenamePrefix << "source-info-mappings" << ".temp";
     std::string filename = filenameStream.str();
 
     std::ofstream _traceOutputFileStream(filename.c_str(), std::ofstream::out | std::ofstream::trunc);
     _traceOutputFileStream.exceptions(std::ofstream::failbit | std::ofstream::badbit);
     if(!_traceOutputFileStream)
     {
-        std::cerr << "Error: Could not open output file '" << filename << "'.temp" << std::endl;
+        std::cerr << "Error: Could not open output file '" << filename << std::endl;
         exit(1);
     }
 
@@ -105,7 +105,7 @@ void TraceWriter::WriteMapToFile()
         _traceOutputFileStream << pair.first << ":" << pair.second << std::endl;
     }
 
-    std::cerr << "Writing map values for map.temp" << std::endl;
+    std::cerr << "Writing map values for source-info-mappings.temp" << std::endl;
     _traceOutputFileStream.close();
 }
 

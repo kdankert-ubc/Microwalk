@@ -86,6 +86,11 @@ public class PinTracePreprocessor : PreprocessorStage
     /// </summary>
     private int _tracePrefixLastStackAllocationId;
 
+    /// <summary>
+    /// The last source info ID used by the trace prefix.
+    /// </summary>
+    private int _tracePrefixLastSourceInfoId;
+
     public override bool SupportsParallelism => true;
 
     public override async Task PreprocessTraceAsync(TraceEntity traceEntity)
@@ -228,6 +233,7 @@ public class PinTracePreprocessor : PreprocessorStage
         var heapAllocationLookup = new SortedList<ulong, HeapAllocation>();
         int nextHeapAllocationId = isPrefix ? 0 : _tracePrefixLastHeapAllocationId + 1;
         int nextStackAllocationId = isPrefix ? 0 : _tracePrefixLastStackAllocationId + 1;
+        int nextSourceInfoId = isPrefix ? 0 : _tracePrefixLastSourceInfoId + 1;
         fixed(byte* inputFilePtr = inputFile)
         {
             for(long pos = 0; pos < inputFileLength; pos += rawTraceEntrySize)
@@ -577,28 +583,20 @@ public class PinTracePreprocessor : PreprocessorStage
                         break;
                     }
 
-                    case RawTraceEntryTypes.SourceInfo when !isPrefix:
+                    case RawTraceEntryTypes.SourceInfo:
                     {
                         var col = (ushort) rawTraceEntry.Param0;
                         var line = (ulong) rawTraceEntry.Param1;
                         var sourceAtom = (ulong) rawTraceEntry.Param2;
 
-                        // TODO: parse temp file using sourceAtom to get filename.
-                        // TODO: Figure out what the path is relative to the test.
-
-                        // TODO: Delete debug statement later. Currently for testing.
-                        Logger.LogWarningAsync($"{logPrefix} SourceInfo created: Col: {col}, Line: {line}, SourceAtom: {sourceAtom:x}").Wait();
-
-
                         var entry = new SourceInfo
                         {
-                            // adjust
+                            Id = nextSourceInfoId++,
                             ColNum = col,
                             LineNum = line,
                             SourceName = sourceAtom,
                         };
 
-                        // Create entry
                         entry.Store(traceFileWriter);
 
                         break;
@@ -615,6 +613,7 @@ public class PinTracePreprocessor : PreprocessorStage
             _tracePrefixStackFrames = stackFrames;
             _tracePrefixLastHeapAllocationId = nextHeapAllocationId - 1;
             _tracePrefixLastStackAllocationId = nextStackAllocationId - 1;
+            _tracePrefixLastSourceInfoId = nextSourceInfoId - 1;
         }
     }
 

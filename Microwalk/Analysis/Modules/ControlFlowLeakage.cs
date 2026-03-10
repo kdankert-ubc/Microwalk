@@ -80,6 +80,11 @@ public partial class ControlFlowLeakage : AnalysisStage
     private readonly Dictionary<ulong, string> _formattedMemoryAddresses = new();
 
     /// <summary>
+    /// Lookup for formatted heap/stack addresses.
+    /// </summary>
+    private readonly Dictionary<ulong, string> _sourceNameMappings = new();
+
+    /// <summary>
     /// Allocation ID which is used for all stack memory accesses which could not be resolved to an allocation.
     /// </summary>
     private const int _unmappedStackAllocationId = 0;
@@ -157,7 +162,6 @@ public partial class ControlFlowLeakage : AnalysisStage
         {
             var traceEntry = traceEnumerator.Current;
             ++traceEntryId;
-
             if(traceEntry.EntryType == TraceEntryTypes.Branch)
             {
                 var branchEntry = (Branch)traceEntry;
@@ -861,34 +865,58 @@ public partial class ControlFlowLeakage : AnalysisStage
                     }
                 }
             }
-
-            else if(traceEntry.EntryType is TraceEntryTypes.SourceInfo)
+            // Tree should never branch due to a SourceInfo node. 
+            else if(traceEntry.EntryType == TraceEntryTypes.SourceInfo)
             {
+                var sourceEntry = (SourceInfo)traceEntry;
 
-                /*
-                 * Step 1: Extract source info data
-                 */
+                // Are there successor nodes from previous testcases?
+                if(successorIndex < currentNode.Successors.Count)
+                {
+                    // Case 1.1: We have seen this node already, continue
+                    // Check current successor
+                    if(currentNode.Successors[successorIndex] is SourceInfoNode sourceNode && sourceNode.Id == sourceEntry.Id && sourceNode.ColNum == sourceEntry.ColNum && sourceNode.LineNum == sourceEntry.LineNum && sourceNode.SourceName == sourceEntry.SourceName)
+                    {
+                        // The successor matches, nothing to do here
+                        ++successorIndex;
+                    }
 
-                ushort col = 0;
-                ulong line = 0;
-                ulong sourceName = 0;
-                var info = (SourceInfo)traceEntry;
+                    // Case 1.2: Should be ignored since source info should not cause a split
+                    else
+                    {   
+                        // Successor does not match, we need to split the current node at this point
+                        await Logger.LogWarningAsync($"{logMessagePrefix} [{traceEntryId}] Case 1.2: Split found for SourceInfo node. Split should never occur.");
+                    }
+                }
+                else
+                {
+                    // We ran out of successor nodes
+                    // Check whether another testcase already hit this particular path
+                    // Case 2.1: This is the first test case that has this trace. Append
+                    if(currentNode.TestcaseIds.Count == 1)
+                    {
+                        var sourceNode = new SourceInfoNode(sourceEntry.Id, sourceEntry.ColNum, sourceEntry.LineNum, sourceEntry.SourceName);
+                        currentNode.Successors.Add(sourceNode);
 
-                col = info.ColNum;
-                line = info.LineNum;
-                sourceName = info.SourceName;
-
-                /*
-                 * Step 2: Add new node for each SourceInfo trace entry.
-                 *
-                 * We don't split the tree ever since obtaining source info does not affect control flow.
-                 */
-
-                var sourceNode = new SourceInfoNode(col, line, sourceName);
-                currentNode.Successors.Add(sourceNode);
-                ++successorIndex;
+                        // Next
+                        ++successorIndex;
+                    }
+                    else if(currentNode.SplitSuccessors.Count > 0)
+                    {
+                        // Should never reach this case since Source Info will not cause a split
+                        // Case 2.2.1: Should be impossible to find a successor that starts on SourceInfoi.
+                        // Case 2.2.2: A split successor does not exist. We should never hit this case since we don't cause a split
+                        await Logger.LogWarningAsync($"{logMessagePrefix} [{traceEntryId}] Case 2.2: SourceInfo node creating a split successor should never occur.");
+                    }
+                    else
+                    {
+                        // Case 2.3: Weird case which can be ignored.
+                        await Logger.LogWarningAsync($"{logMessagePrefix} [{traceEntryId}] Case 2.3: Split found due to broken traces");
+                    }
+                }
             }
         }
+        // */
     }
 
     public override async Task FinishAsync()
@@ -1478,6 +1506,8 @@ public partial class ControlFlowLeakage : AnalysisStage
             
             _deferredMapFileTasks.Clear();
         }
+
+        // TODO: LOAD SOURCE INFO ENTRY
 
         // Dump internal data?
         _dumpCallTree = moduleOptions.GetChildNodeOrDefault("dump-call-tree")?.AsBoolean() ?? false;

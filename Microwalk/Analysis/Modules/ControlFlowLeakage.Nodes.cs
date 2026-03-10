@@ -202,12 +202,18 @@ public partial class ControlFlowLeakage
 
     private class SourceInfoNode : CallTreeNode
     {
-        public SourceInfoNode(ushort col, ulong line, ulong sourceName)
+        public SourceInfoNode(int id, ushort col, ulong line, ulong sourceName)
         {
+            Id = id;
             ColNum = col;
             LineNum = line;
             SourceName = sourceName;
         }
+
+        /// <summary>
+        /// Unique allocation ID of this node, which all testcase-specific IDs map to. 
+        /// </summary>
+        public int Id { get; }
 
         /// <summary>
         /// Column number.

@@ -613,6 +613,7 @@ VOID InstrumentImage(IMG img, [[maybe_unused]] VOID* v)
 			IARG_FUNCARG_ENTRYPOINT_VALUE, 1, 
 			IARG_FUNCARG_ENTRYPOINT_VALUE, 2,
 			IARG_FUNCARG_ENTRYPOINT_VALUE, 3,
+			IARG_RETURN_REGS, _nextBufferEntryReg,
 			IARG_END);
 		RTN_Close(SourceInfoRtn);
 

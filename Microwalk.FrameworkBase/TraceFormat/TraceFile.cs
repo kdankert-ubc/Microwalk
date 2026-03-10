@@ -189,7 +189,7 @@ public class NonAllocatingTraceFileEnumerator : IEnumerator<ITraceEntry>
     private readonly HeapMemoryAccess _traceEntryHeapMemoryAccess = new();
     private readonly ImageMemoryAccess _traceEntryImageMemoryAccess = new();
     private readonly StackMemoryAccess _traceEntryStackMemoryAccess = new();
-    private readonly StackMemoryAccess _traceEntrySourceInfo = new();
+    private readonly SourceInfo _traceEntrySourceInfo = new();
 
     public ITraceEntry Current => _current ?? throw new InvalidOperationException("Current should not be used in this state");
     object IEnumerator.Current => Current;

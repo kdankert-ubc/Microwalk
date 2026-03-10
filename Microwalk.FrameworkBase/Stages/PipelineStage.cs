@@ -38,7 +38,8 @@ public abstract class PipelineStage
         HeapMemoryAccess.EntrySize,
         ImageMemoryAccess.EntrySize,
         StackAllocation.EntrySize,
-        StackMemoryAccess.EntrySize
+        StackMemoryAccess.EntrySize,
+        SourceInfo.EntrySize,
     }.Max();
 
     /// <summary>

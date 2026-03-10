@@ -254,7 +254,11 @@ public class PinTraceDumper : PreprocessorStage
                         {
                             Logger.LogErrorAsync($"{logPrefix} Unspecified instruction type on stack pointer modification, skipping").Wait();
                         }
-
+                        break;
+                    }
+                    case PinTracePreprocessor.RawTraceEntryTypes.SourceInfo:
+                    {
+                        outputWriter.WriteLine($"SourceInfo: {rawTraceEntry.Param0:x} {rawTraceEntry.Param1:x} {rawTraceEntry.Param2:x}");
                         break;
                     }
                 }
