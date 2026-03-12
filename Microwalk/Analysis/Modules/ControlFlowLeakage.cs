@@ -45,6 +45,11 @@ public partial class ControlFlowLeakage : AnalysisStage
     private List<Func<Task>> _deferredMapFileTasks = null!;
 
     /// <summary>
+    /// Path to the JSAtom to source file name mapping file.
+    /// </summary>
+    private string _sourceInfoMappingPath = null!;
+
+    /// <summary>
     /// Controls whether the call tree should be written to a dump file.
     /// </summary>
     private bool _dumpCallTree;
@@ -937,6 +942,20 @@ public partial class ControlFlowLeakage : AnalysisStage
         // Write call tree to text file
         await using var callTreeDumpWriter = new StreamWriter(File.Create(Path.Combine(_outputDirectory.FullName, "call-tree-dump.txt")));
 
+        // Fills source info name to JSAtom mapping
+        var lines = await File.ReadAllLinesAsync(_sourceInfoMappingPath);
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+
+            int colonIndex = line.IndexOf(':');
+            if (colonIndex != -1 && ulong.TryParse(line.AsSpan(0, colonIndex), out ulong id))
+            {
+                string fileName = line.Substring(colonIndex + 1);
+                _sourceNameMappings[id] = fileName;
+            }
+        }
+        
         // Store analysis results for each instruction and each call stack
         CallStackNode rootCallStackNode = new CallStackNode { Id = _rootNodeCallStackId };
 
@@ -1506,26 +1525,9 @@ public partial class ControlFlowLeakage : AnalysisStage
             
             _deferredMapFileTasks.Clear();
         }
+        //
 
-        // Fills source info name to JSAtom mapping
-        string sourceInfoMappingPath = moduleOptions.GetChildNodeOrDefault("source-info-mappings")?.AsString() ?? throw new ConfigurationException("Missing file for source info to JSAtom mappings.");
-
-        if(!File.Exists(sourceInfoMappingPath))
-            throw new ConfigurationException("File not found for source info to JSAtom mappings.");
-
-        foreach(var line in await File.ReadAllLinesAsync(sourceInfoMappingPath))
-        {
-            if(string.IsNullOrWhiteSpace(line))
-                continue;
-
-            int colonIndex = line.IndexOf(':');
-            if(colonIndex != -1 && ulong.TryParse(line.AsSpan(0, colonIndex), out ulong id))
-            {
-                string fileName = line.Substring(colonIndex + 1);
-                
-                _sourceNameMappings[id] = fileName;
-            }
-        }
+        _sourceInfoMappingPath = moduleOptions.GetChildNodeOrDefault("source-info-mappings")?.AsString() ?? throw new ConfigurationException("Invalid source info file mapping in config.");
 
         // Dump internal data?
         _dumpCallTree = moduleOptions.GetChildNodeOrDefault("dump-call-tree")?.AsBoolean() ?? false;

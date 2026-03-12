@@ -14,10 +14,11 @@ std::vector<FilterEntry> filter;
 /* STATIC VARIABLES */
 
 std::map<ADDRINT, std::string> TraceWriter::_alias;
-std::map<int, std::string> _atomToName;
+std::map<UINT64, std::string> TraceWriter::_sourceInfo;
 bool TraceWriter::_prefixMode;
 std::ofstream TraceWriter::_prefixDataFileStream;
 std::ofstream TraceWriter::_aliasFileStream("alias.txt");
+std::ofstream TraceWriter::_sourceInfoFileStream("source-info-mappings.txt");
 
 bool TraceWriter::_sawFirstReturn;
 
@@ -37,6 +38,7 @@ TraceWriter::~TraceWriter()
 {
     // Close file stream
     _aliasFileStream.close();
+    _sourceInfoFileStream.close();
     _outputFileStream.close();
 }
 
@@ -88,31 +90,6 @@ void TraceWriter::WriteBufferToFile(TraceEntry* end)
         _outputFileStream.write(reinterpret_cast<char*>(_entries), static_cast<std::streamsize>(reinterpret_cast<ADDRINT>(end) - reinterpret_cast<ADDRINT>(_entries)));
 }
 
-
-void TraceWriter::WriteMapToFile()
-{
-    std::stringstream filenameStream;
-    filenameStream << _outputFilenamePrefix << "source-info-mappings" << ".temp";
-    std::string filename = filenameStream.str();
-
-    std::ofstream _traceOutputFileStream(filename.c_str(), std::ofstream::out | std::ofstream::trunc);
-    _traceOutputFileStream.exceptions(std::ofstream::failbit | std::ofstream::badbit);
-    if(!_traceOutputFileStream)
-    {
-        std::cerr << "Error: Could not open output file '" << filename << std::endl;
-        exit(1);
-    }
-
-    // JSAtom:Source File Name
-    for (const auto& pair : _atomToName) 
-    {
-        _traceOutputFileStream << pair.first << ":" << pair.second << std::endl;
-    }
-
-    std::cerr << "Writing map values for source-info-mappings.temp" << std::endl;
-    _traceOutputFileStream.close();
-}
-
 void TraceWriter::TestcaseStart(int testcaseId, TraceEntry* nextEntry)
 {
     // Exit prefix mode if necessary
@@ -153,9 +130,6 @@ void TraceWriter::TestcaseEnd(TraceEntry* nextEntry)
         // Notify caller that the trace file is complete
 		std::cout << "t\t" << _currentOutputFilename << std::endl;
     }
-
-    // Write source info mappings
-    WriteMapToFile();
 
     // Disable tracing until next test case starts
     _testcaseId = -1;
@@ -366,21 +340,6 @@ TraceEntry* TraceWriter::InsertStackPointerInfoEntry(TraceWriter *traceWriter, T
     return CheckBufferAndStore(traceWriter, nextEntry + 1);
 }
 
-TraceEntry* TraceWriter::InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT16 col, UINT64 line, UINT64 sourceAtom, const char* sourceName)
-{
-    // Create entry
-    nextEntry->Type = TraceEntryTypes::SourceInfo;
-    nextEntry->Param0 = col;
-    nextEntry->Param1 = line;
-    nextEntry->Param2 = sourceAtom;
-    // Ensure no duplciate naming atoms
-    if (_atomToName.find(sourceAtom) == _atomToName.end()) {
-        _atomToName[sourceAtom] = sourceName;
-    }
-
-    return CheckBufferAndStore(traceWriter, nextEntry + 1);
-}
-
 
 ImageData::ImageData(bool interesting, std::string name, UINT64 startAddress, UINT64 endAddress)
 {
@@ -414,4 +373,22 @@ void TraceWriter::AddAlias(ADDRINT addr, char *name)
     if (IMG_Valid(img)) {
         _aliasFileStream << std::hex << std::setw(8) << std::setfill('0') << (addr - IMG_LowAddress(img)) << " " << name << std::endl;
     }
+}
+
+TraceEntry* TraceWriter::InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEntry* nextEntry, UINT16 col, UINT64 line, UINT64 sourceAtom, const char* sourceName)
+{
+    // Create entry
+    nextEntry->Type = TraceEntryTypes::SourceInfo;
+    nextEntry->Param0 = col;
+    nextEntry->Param1 = line;
+    nextEntry->Param2 = sourceAtom;
+    
+    bool inserted = _sourceInfo.insert(std::pair<UINT64, std::string>(sourceAtom, sourceName)).second;
+    
+    // Ensure no duplciate naming atoms when inserting
+    if (inserted) {
+        _sourceInfoFileStream << sourceAtom << ":" << sourceName << std::endl;
+    }
+
+    return CheckBufferAndStore(traceWriter, nextEntry + 1);
 }

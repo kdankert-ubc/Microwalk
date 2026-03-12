@@ -735,7 +735,7 @@ VOID InstrumentImage(IMG img, [[maybe_unused]] VOID* v)
 	}
 
 	// Find runtime source file info debug function
-	RTN SourceInfoRtn = RTN_FindByName(img, "PinSourceInfo");
+	RTN SourceInfoRtn = RTN_FindByName(img, "PinNotifySourceInfo");
 	if (RTN_Valid(SourceInfoRtn))
 	{
 		// Send source info
@@ -751,7 +751,7 @@ VOID InstrumentImage(IMG img, [[maybe_unused]] VOID* v)
 			IARG_END);
 		RTN_Close(SourceInfoRtn);
 
-		std::cerr << "    PinSourceInfo() instrumented." << std::endl;
+		std::cerr << "    PinNotifySourceInfo() instrumented." << std::endl;
 	}
 
 	if (KnobCustomMemoryFunctions.NumberOfValues() == 0)

@@ -133,6 +133,9 @@ private:
     static std::map<ADDRINT, std::string> _alias;
     static std::ofstream _aliasFileStream;
 
+    static std::map<UINT64, std::string> _sourceInfo;
+    static std::ofstream _sourceInfoFileStream;
+
 private:
     // Opens the output file and sets the respective internal state.
     void OpenOutputFile(std::string& filename);
