@@ -1209,7 +1209,7 @@ public partial class ControlFlowLeakage : AnalysisStage
                     else if(_dumpCallTree && successorNode is SourceInfoNode sourceNode)
                     {
                         // Print node
-                        await callTreeDumpWriter.WriteLineAsync($"{indentation}    #source {sourceNode.ColNum}:{sourceNode.LineNum}:{_sourceNameMappings[sourceNode.SourceName]}");
+                        await callTreeDumpWriter.WriteLineAsync($"{indentation}    #source {_sourceNameMappings[sourceNode.SourceName]}:{sourceNode.ColNum}:{sourceNode.LineNum}");
                     }
 
                 }
