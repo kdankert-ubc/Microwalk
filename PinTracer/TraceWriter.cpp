@@ -156,14 +156,13 @@ bool TraceWriter::IsWhitelisted(TraceEntryTypes type, ADDRINT instr, ADDRINT add
     for (size_t i = 0; i < filter.size(); ++i) {
         FilterEntry &entry = filter[i];
 
-        if ((entry.originStart == 0 || entry.originEnd == 0) && (entry.targetStart == 0 || entry.targetEnd == 0))
-            continue;
-
         bool acc = true;
         if (entry.originStart && entry.originEnd)
             acc &= instr >= (ADDRINT) entry.originStart && instr <= (ADDRINT) entry.originEnd;
         if (entry.targetStart && entry.targetEnd)
             acc &= addr >= (ADDRINT) entry.targetStart && addr <= (ADDRINT) entry.targetEnd;
+        if (entry.originStart == 0 && entry.originEnd == 0 && entry.targetStart == 0 && entry.targetEnd == 0)
+            acc = true;
 
         if (!acc)
             continue;

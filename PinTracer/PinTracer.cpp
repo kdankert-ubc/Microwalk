@@ -272,10 +272,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 			if(INS_IsCall(ins) && INS_IsControlFlow(ins))
 			{
 				// call instructions cannot be instrumented with IPOINT_AFTER, since they do have no fallthrough
-				INS_InsertIfCall(ins, IPOINT_BEFORE, AFUNPTR(CheckNextTraceEntryPointerValid),
-					IARG_REG_VALUE, _nextBufferEntryReg,
-					IARG_END);
-				INS_InsertThenCall(ins, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertBranchEntry),
+				INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertBranchEntry),
                     IARG_REG_VALUE, _traceWriterReg,
 					IARG_REG_VALUE, _nextBufferEntryReg,
 					IARG_INST_PTR,
@@ -288,10 +285,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 				// Store stack pointer value
 				if(_enableStackAllocationTracking)
 				{
-					INS_InsertIfCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(CheckNextTraceEntryPointerValid),
-						IARG_REG_VALUE, _nextBufferEntryReg,
-						IARG_END);
-					INS_InsertThenCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(TraceWriter::InsertStackPointerModificationEntry),
+					INS_InsertCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(TraceWriter::InsertStackPointerModificationEntry),
                         IARG_REG_VALUE, _traceWriterReg,
 						IARG_REG_VALUE, _nextBufferEntryReg,
 						IARG_INST_PTR,
@@ -303,10 +297,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 
 #ifndef USE_LEGACY_ALLOC_RETURN_TRACKING
                 // Trace allocation function returns
-                INS_InsertIfCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(CheckNextTraceEntryPointerValid),
-                    IARG_REG_VALUE, _nextBufferEntryReg,
-                    IARG_END);
-                INS_InsertThenCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(TrackAllocationCall),
+                INS_InsertCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(TrackAllocationCall),
                     IARG_END);
 #endif
 
@@ -314,10 +305,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 			}
 			if(INS_IsBranch(ins) && INS_IsControlFlow(ins))
 			{
-				INS_InsertIfCall(ins, IPOINT_BEFORE, AFUNPTR(CheckNextTraceEntryPointerValid),
-					IARG_REG_VALUE, _nextBufferEntryReg,
-					IARG_END);
-				INS_InsertThenCall(ins, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertBranchEntry),
+				INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertBranchEntry),
                     IARG_REG_VALUE, _traceWriterReg,
 					IARG_REG_VALUE, _nextBufferEntryReg,
 					IARG_INST_PTR,
@@ -332,10 +320,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 			if(INS_IsRet(ins) && INS_IsControlFlow(ins))
 			{
 				// ret instructions cannot be instrumented with IPOINT_AFTER, since they do have no fallthrough
-				INS_InsertIfCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(CheckNextTraceEntryPointerValid),
-					IARG_REG_VALUE, _nextBufferEntryReg,
-					IARG_END);
-				INS_InsertThenCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(TraceWriter::InsertRetBranchEntry),
+				INS_InsertCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(TraceWriter::InsertRetBranchEntry),
                     IARG_REG_VALUE, _traceWriterReg,
 					IARG_REG_VALUE, _nextBufferEntryReg,
 					IARG_INST_PTR,
@@ -346,10 +331,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 				// Store stack pointer value
 				if(_enableStackAllocationTracking)
 				{
-					INS_InsertIfCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(CheckNextTraceEntryPointerValid),
-						IARG_REG_VALUE, _nextBufferEntryReg,
-						IARG_END);
-					INS_InsertThenCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(TraceWriter::InsertStackPointerModificationEntry),
+					INS_InsertCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(TraceWriter::InsertStackPointerModificationEntry),
                         IARG_REG_VALUE, _traceWriterReg,
 						IARG_REG_VALUE, _nextBufferEntryReg,
 						IARG_INST_PTR,
@@ -361,10 +343,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 
 #ifndef USE_LEGACY_ALLOC_RETURN_TRACKING
                 // Trace allocation function returns
-                INS_InsertIfCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(CheckNextTraceEntryPointerValid),
-                    IARG_REG_VALUE, _nextBufferEntryReg,
-                    IARG_END);
-                INS_InsertThenCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(TrackAllocationReturn),
+                INS_InsertCall(ins, IPOINT_TAKEN_BRANCH, AFUNPTR(TrackAllocationReturn),
                     IARG_REG_VALUE, _traceWriterReg,
                     IARG_REG_VALUE, _nextBufferEntryReg,
                     IARG_FUNCRET_EXITPOINT_VALUE,
@@ -382,10 +361,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 			// ret is already tracked above; push/pop are ignored
 			if(_enableStackAllocationTracking && INS_FullRegWContain(ins, REG_RSP))
 			{
-				INS_InsertIfCall(ins, IPOINT_AFTER, AFUNPTR(CheckNextTraceEntryPointerValid),
-					IARG_REG_VALUE, _nextBufferEntryReg,
-					IARG_END);
-				INS_InsertThenCall(ins, IPOINT_AFTER, AFUNPTR(TraceWriter::InsertStackPointerModificationEntry),
+				INS_InsertCall(ins, IPOINT_AFTER, AFUNPTR(TraceWriter::InsertStackPointerModificationEntry),
                     IARG_REG_VALUE, _traceWriterReg,
 					IARG_REG_VALUE, _nextBufferEntryReg,
 					IARG_INST_PTR,
@@ -398,10 +374,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 			// Trace instructions with memory read
 			if(INS_IsMemoryRead(ins) && INS_IsStandardMemop(ins))
 			{
-				INS_InsertIfCall(ins, IPOINT_BEFORE, AFUNPTR(CheckNextTraceEntryPointerValid),
-					IARG_REG_VALUE, _nextBufferEntryReg,
-					IARG_END);
-				INS_InsertThenCall(ins, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertMemoryReadEntry),
+				INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertMemoryReadEntry),
                     IARG_REG_VALUE, _traceWriterReg,
 					IARG_REG_VALUE, _nextBufferEntryReg,
 					IARG_INST_PTR,
@@ -414,10 +387,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 			// Trace instructions with a second memory read operand
 			if(INS_HasMemoryRead2(ins) && INS_IsStandardMemop(ins))
 			{
-				INS_InsertIfCall(ins, IPOINT_BEFORE, AFUNPTR(CheckNextTraceEntryPointerValid),
-					IARG_REG_VALUE, _nextBufferEntryReg,
-					IARG_END);
-				INS_InsertThenCall(ins, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertMemoryReadEntry),
+				INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertMemoryReadEntry),
                     IARG_REG_VALUE, _traceWriterReg,
 					IARG_REG_VALUE, _nextBufferEntryReg,
 					IARG_INST_PTR,
@@ -430,10 +400,7 @@ VOID InstrumentTrace(TRACE trace, [[maybe_unused]] VOID* v)
 			// Trace instructions with memory write
 			if(INS_IsMemoryWrite(ins) && INS_IsStandardMemop(ins))
 			{
-				INS_InsertIfCall(ins, IPOINT_BEFORE, AFUNPTR(CheckNextTraceEntryPointerValid),
-					IARG_REG_VALUE, _nextBufferEntryReg,
-					IARG_END);
-				INS_InsertThenCall(ins, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertMemoryWriteEntry),
+				INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(TraceWriter::InsertMemoryWriteEntry),
                     IARG_REG_VALUE, _traceWriterReg,
 					IARG_REG_VALUE, _nextBufferEntryReg,
 					IARG_INST_PTR,
@@ -967,7 +934,7 @@ void SetFilter(FilterEntry *addr, size_t size)
 
 void AddFilter(FilterEntry *entry)
 {
-    if ((entry->originStart == 0 || entry->originEnd == 0) && (entry->targetStart == 0 || entry->targetEnd == 0))
+    if (entry->originStart == 0 && entry->originEnd == 0 && entry->targetStart == 0 && entry->targetEnd == 0)
         return;
     filter.push_back(*entry);
 }
