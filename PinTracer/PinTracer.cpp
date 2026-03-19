@@ -943,8 +943,8 @@ void RemoveFilter(FilterType type, ADDRINT origin, ADDRINT target)
 {
     filter.erase(std::remove_if(filter.begin(), filter.end(), [&](const FilterEntry& entry) {
         return FilterTypeMatch(type, entry.type) &&
-            (origin == 0 || (entry.originStart <= origin && origin <= entry.originEnd)) &&
-            (target == 0 || (entry.targetStart <= target && target <= entry.targetEnd));
+            (origin == 0 || (entry.originStart == origin && entry.originEnd == origin) || (entry.originStart <= origin && origin < entry.originEnd)) &&
+            (target == 0 || (entry.targetStart == target && entry.targetEnd == target) || (entry.targetStart <= target && target < entry.targetEnd));
     }), filter.end());
 }
 
