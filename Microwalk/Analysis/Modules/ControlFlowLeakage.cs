@@ -70,6 +70,11 @@ public partial class ControlFlowLeakage : AnalysisStage
     private readonly RootNode _rootNode = new();
 
     /// <summary>
+    /// Saving the initialized module options.
+    /// </summary>
+    private MappingNode _moduleOptions = null;
+
+    /// <summary>
     /// Lookup for formatted image addresses.
     /// </summary>
     private readonly Dictionary<ulong, string> _formattedImageAddresses = new();
@@ -943,6 +948,7 @@ public partial class ControlFlowLeakage : AnalysisStage
         await using var callTreeDumpWriter = new StreamWriter(File.Create(Path.Combine(_outputDirectory.FullName, "call-tree-dump.txt")));
 
         // Fills source info name to JSAtom mapping
+        _sourceInfoMappingPath = _moduleOptions.GetChildNodeOrDefault("source-info-mappings")?.AsString() ?? throw new ConfigurationException("Invalid source info file mapping in config.");
         var lines = await File.ReadAllLinesAsync(_sourceInfoMappingPath);
         foreach (var line in lines)
         {
@@ -1490,6 +1496,8 @@ public partial class ControlFlowLeakage : AnalysisStage
         if(moduleOptions == null)
             throw new ConfigurationException("Missing module configuration.");
 
+        _moduleOptions = moduleOptions;
+
         // Extract output path
         string outputDirectoryPath = moduleOptions.GetChildNodeOrDefault("output-directory")?.AsString() ?? throw new ConfigurationException("Missing output directory for analysis results.");
         _outputDirectory = Directory.CreateDirectory(outputDirectoryPath);
@@ -1525,9 +1533,6 @@ public partial class ControlFlowLeakage : AnalysisStage
             
             _deferredMapFileTasks.Clear();
         }
-        //
-
-        _sourceInfoMappingPath = moduleOptions.GetChildNodeOrDefault("source-info-mappings")?.AsString() ?? throw new ConfigurationException("Invalid source info file mapping in config.");
 
         // Dump internal data?
         _dumpCallTree = moduleOptions.GetChildNodeOrDefault("dump-call-tree")?.AsBoolean() ?? false;
