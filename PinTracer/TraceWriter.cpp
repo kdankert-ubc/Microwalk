@@ -362,6 +362,8 @@ bool ImageData::IsInteresting() const
 
 void TraceWriter::AddAlias(ADDRINT addr, char *name)
 {
+    static bool aliasInitialized = false;
+
     bool inserted = _alias.insert(std::pair<ADDRINT, std::string>(addr, name)).second;
     if (!inserted) {
         return;
@@ -370,7 +372,13 @@ void TraceWriter::AddAlias(ADDRINT addr, char *name)
     PIN_LockClient();
     IMG img = IMG_FindByAddress(addr);
     PIN_UnlockClient();
+
     if (IMG_Valid(img)) {
+        const std::string& imgName = IMG_Name(img);
+        if (!aliasInitialized) {
+            _aliasFileStream << imgName << std::endl;
+            aliasInitialized = true;
+        }
         _aliasFileStream << std::hex << std::setw(8) << std::setfill('0') << (addr - IMG_LowAddress(img)) << " " << name << std::endl;
     }
 }
@@ -382,9 +390,9 @@ TraceEntry* TraceWriter::InsertSourceInfoEntry(TraceWriter *traceWriter, TraceEn
     nextEntry->Param0 = col;
     nextEntry->Param1 = line;
     nextEntry->Param2 = sourceAtom;
-    
+
     bool inserted = _sourceInfo.insert(std::pair<UINT64, std::string>(sourceAtom, sourceName)).second;
-    
+
     // Ensure no duplciate naming atoms when inserting
     if (inserted) {
         _sourceInfoFileStream << sourceAtom << ":" << sourceName << std::endl;

@@ -46,7 +46,10 @@ public class MapFileCollection
     /// <returns></returns>
     public async Task LoadMapFileAsync(string mapFileName)
     {
-        var imageName = File.ReadLines(mapFileName).First();
+        var imageName = File.ReadLines(mapFileName).FirstOrDefault() ?? string.Empty;
+        if (string.IsNullOrEmpty(imageName))
+            return;
+
         var mapFile = _mapFiles.FirstOrDefault(m => string.Compare(imageName, m.ImageName, true, CultureInfo.InvariantCulture) == 0);
         if (mapFile == null)
         {
