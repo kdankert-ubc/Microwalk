@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microwalk.FrameworkBase.TraceFormat.TraceEntryTypes;
 
 namespace Microwalk.Analysis.Modules;
 
@@ -90,11 +91,12 @@ public partial class ControlFlowLeakage
 
     private class BranchNode : CallTreeNode
     {
-        public BranchNode(ulong sourceInstructionId, ulong targetInstructionId, bool taken)
+        public BranchNode(ulong sourceInstructionId, ulong targetInstructionId, bool taken, SourceInfo sourceInfo)
         {
             SourceInstructionId = sourceInstructionId;
             TargetInstructionId = targetInstructionId;
             Taken = taken;
+            Source = sourceInfo;
         }
 
         /// <summary>
@@ -112,6 +114,10 @@ public partial class ControlFlowLeakage
         /// </summary>
         public bool Taken { get; }
 
+        /// <summary>
+        /// Source info for this branch
+        /// </summary>
+        public SourceInfo Source { get; }
 
         public override bool Equals(object? obj)
         {
@@ -121,19 +127,20 @@ public partial class ControlFlowLeakage
         private bool Equals(BranchNode other)
         {
             return SourceInstructionId == other.SourceInstructionId
-                   && TargetInstructionId == other.TargetInstructionId;
+                   && TargetInstructionId == other.TargetInstructionId
+                   && Source == other.Source;
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(SourceInstructionId, TargetInstructionId);
+            return HashCode.Combine(SourceInstructionId, TargetInstructionId, Source);
         }
     }
 
     private class ReturnNode : BranchNode
     {
         public ReturnNode(ulong sourceInstructionId, ulong targetInstructionId)
-            : base(sourceInstructionId, targetInstructionId, true)
+            : base(sourceInstructionId, targetInstructionId, true, new SourceInfo())
         {
         }
     }
@@ -199,36 +206,4 @@ public partial class ControlFlowLeakage
         /// </summary>
         public uint Size { get; }
     }
-
-    private class SourceInfoNode : CallTreeNode
-    {
-        public SourceInfoNode(int id, ushort col, ulong line, ulong sourceName)
-        {
-            Id = id;
-            ColNum = col;
-            LineNum = line;
-            SourceName = sourceName;
-        }
-
-        /// <summary>
-        /// Unique allocation ID of this node, which all testcase-specific IDs map to. 
-        /// </summary>
-        public int Id { get; }
-
-        /// <summary>
-        /// Column number.
-        /// </summary>
-        public ushort ColNum { get; }
-
-        /// <summary>
-        /// Line number.
-        /// </summary>
-        public ulong LineNum { get; }
-
-        /// <summary>
-        /// Source File Name
-        /// </summary>
-        public ulong SourceName { get; }
-    }
-
 }

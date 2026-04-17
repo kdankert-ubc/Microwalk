@@ -86,11 +86,6 @@ public class PinTracePreprocessor : PreprocessorStage
     /// </summary>
     private int _tracePrefixLastStackAllocationId;
 
-    /// <summary>
-    /// The last source info ID used by the trace prefix.
-    /// </summary>
-    private int _tracePrefixLastSourceInfoId;
-
     public override bool SupportsParallelism => true;
 
     public override async Task PreprocessTraceAsync(TraceEntity traceEntity)
@@ -233,7 +228,12 @@ public class PinTracePreprocessor : PreprocessorStage
         var heapAllocationLookup = new SortedList<ulong, HeapAllocation>();
         int nextHeapAllocationId = isPrefix ? 0 : _tracePrefixLastHeapAllocationId + 1;
         int nextStackAllocationId = isPrefix ? 0 : _tracePrefixLastStackAllocationId + 1;
-        int nextSourceInfoId = isPrefix ? 0 : _tracePrefixLastSourceInfoId + 1;
+        var lastSourceInfo = new SourceInfo 
+        {
+            ColNum = 0, 
+            LineNum = 0, 
+            SourceName = 0 
+        };
         fixed(byte* inputFilePtr = inputFile)
         {
             for(long pos = 0; pos < inputFileLength; pos += rawTraceEntrySize)
@@ -458,7 +458,19 @@ public class PinTracePreprocessor : PreprocessorStage
                             SourceInstructionRelativeAddress = (uint)(rawTraceEntry.Param1 - sourceImage.StartAddress),
                             DestinationImageId = destinationImageId,
                             DestinationInstructionRelativeAddress = (uint)(rawTraceEntry.Param2 - destinationImage!.StartAddress),
+                            Source = new SourceInfo 
+                            {
+                                ColNum = lastSourceInfo.ColNum,
+                                LineNum = lastSourceInfo.LineNum,
+                                SourceName = lastSourceInfo.SourceName
+                            },                            
                             Taken = (flags & RawTraceBranchEntryFlags.Taken) != 0
+                        };
+                        lastSourceInfo = new SourceInfo 
+                        {
+                            ColNum = 0, 
+                            LineNum = 0, 
+                            SourceName = 0 
                         };
                         var rawBranchType = flags & RawTraceBranchEntryFlags.BranchEntryTypeMask;
                         if(rawBranchType == RawTraceBranchEntryFlags.Jump)
@@ -582,22 +594,18 @@ public class PinTracePreprocessor : PreprocessorStage
 
                         break;
                     }
-
                     case RawTraceEntryTypes.SourceInfo:
                     {
                         var col = (ushort) rawTraceEntry.Param0;
                         var line = (ulong) rawTraceEntry.Param1;
                         var sourceAtom = (ulong) rawTraceEntry.Param2;
 
-                        var entry = new SourceInfo
+                        lastSourceInfo = new SourceInfo
                         {
-                            Id = nextSourceInfoId++,
                             ColNum = col,
                             LineNum = line,
                             SourceName = sourceAtom,
                         };
-
-                        entry.Store(traceFileWriter);
 
                         break;
                     }
@@ -613,7 +621,6 @@ public class PinTracePreprocessor : PreprocessorStage
             _tracePrefixStackFrames = stackFrames;
             _tracePrefixLastHeapAllocationId = nextHeapAllocationId - 1;
             _tracePrefixLastStackAllocationId = nextStackAllocationId - 1;
-            _tracePrefixLastSourceInfoId = nextSourceInfoId - 1;
         }
     }
 

@@ -301,7 +301,7 @@ public partial class ControlFlowLeakage : AnalysisStage
                         if(successorIndex < currentNode.Successors.Count)
                         {
                             // Check current successor
-                            if(currentNode.Successors[successorIndex] is BranchNode branchNode && branchNode.SourceInstructionId == sourceInstructionId && branchNode.TargetInstructionId == targetInstructionId)
+                            if(currentNode.Successors[successorIndex] is BranchNode branchNode && branchNode.SourceInstructionId == sourceInstructionId && branchNode.TargetInstructionId == targetInstructionId && branchNode.Source == branchEntry.Source)
                             {
                                 // The successor matches, nothing to do here
 
@@ -311,7 +311,7 @@ public partial class ControlFlowLeakage : AnalysisStage
                             {
                                 // Successor does not match, we need to split the current node at this point
 
-                                branchNode = new BranchNode(sourceInstructionId, targetInstructionId, branchEntry.Taken);
+                                branchNode = new BranchNode(sourceInstructionId, targetInstructionId, branchEntry.Taken, branchEntry.Source);
                                 var newSplitNode = currentNode.SplitAtSuccessor(successorIndex, traceEntity.Id, branchNode);
 
                                 // Continue with new split node
@@ -326,7 +326,7 @@ public partial class ControlFlowLeakage : AnalysisStage
                             if(currentNode.TestcaseIds.Count == 1)
                             {
                                 // No, this is purely ours. So just append another successor
-                                var branchNode = new BranchNode(sourceInstructionId, targetInstructionId, branchEntry.Taken);
+                                var branchNode = new BranchNode(sourceInstructionId, targetInstructionId, branchEntry.Taken, branchEntry.Source);
                                 currentNode.Successors.Add(branchNode);
 
                                 // Next
@@ -338,7 +338,7 @@ public partial class ControlFlowLeakage : AnalysisStage
                                 bool found = false;
                                 foreach(var splitSuccessor in currentNode.SplitSuccessors)
                                 {
-                                    if(splitSuccessor.Successors[0] is BranchNode branchNode && branchNode.SourceInstructionId == sourceInstructionId && branchNode.TargetInstructionId == targetInstructionId)
+                                    if(splitSuccessor.Successors[0] is BranchNode branchNode && branchNode.SourceInstructionId == sourceInstructionId && branchNode.TargetInstructionId == targetInstructionId && branchNode.Source == branchEntry.Source)
                                     {
                                         // The split successor matches, we can continue there
 
@@ -356,7 +356,7 @@ public partial class ControlFlowLeakage : AnalysisStage
                                 {
                                     // Add new split successor
                                     var splitNode = new SplitNode();
-                                    var branchNode = new BranchNode(sourceInstructionId, targetInstructionId, branchEntry.Taken);
+                                    var branchNode = new BranchNode(sourceInstructionId, targetInstructionId, branchEntry.Taken, branchEntry.Source);
 
                                     splitNode.Successors.Add(branchNode);
                                     splitNode.TestcaseIds.Add(traceEntity.Id);
@@ -373,7 +373,7 @@ public partial class ControlFlowLeakage : AnalysisStage
                                 await Logger.LogWarningAsync($"{logMessagePrefix} [{traceEntryId}] Encountered weird case for branch entry");
 
                                 var splitNode = new SplitNode();
-                                var branchNode = new BranchNode(sourceInstructionId, targetInstructionId, branchEntry.Taken);
+                                var branchNode = new BranchNode(sourceInstructionId, targetInstructionId, branchEntry.Taken, branchEntry.Source);
 
                                 splitNode.Successors.Add(branchNode);
                                 splitNode.TestcaseIds.Add(traceEntity.Id);
@@ -875,58 +875,7 @@ public partial class ControlFlowLeakage : AnalysisStage
                     }
                 }
             }
-            // Tree should never branch due to a SourceInfo node. 
-            else if(traceEntry.EntryType == TraceEntryTypes.SourceInfo)
-            {
-                var sourceEntry = (SourceInfo)traceEntry;
-
-                // Are there successor nodes from previous testcases?
-                if(successorIndex < currentNode.Successors.Count)
-                {
-                    // Case 1.1: We have seen this node already, continue
-                    // Check current successor
-                    if(currentNode.Successors[successorIndex] is SourceInfoNode sourceNode && sourceNode.Id == sourceEntry.Id && sourceNode.ColNum == sourceEntry.ColNum && sourceNode.LineNum == sourceEntry.LineNum && sourceNode.SourceName == sourceEntry.SourceName)
-                    {
-                        // The successor matches, nothing to do here
-                        ++successorIndex;
-                    }
-
-                    // Case 1.2: Should be ignored since source info should not cause a split
-                    else
-                    {   
-                        // Successor does not match, we need to split the current node at this point
-                        await Logger.LogWarningAsync($"{logMessagePrefix} [{traceEntryId}] Case 1.2: Split found for SourceInfo node. Split should never occur.");
-                    }
-                }
-                else
-                {
-                    // We ran out of successor nodes
-                    // Check whether another testcase already hit this particular path
-                    // Case 2.1: This is the first test case that has this trace. Append
-                    if(currentNode.TestcaseIds.Count == 1)
-                    {
-                        var sourceNode = new SourceInfoNode(sourceEntry.Id, sourceEntry.ColNum, sourceEntry.LineNum, sourceEntry.SourceName);
-                        currentNode.Successors.Add(sourceNode);
-
-                        // Next
-                        ++successorIndex;
-                    }
-                    else if(currentNode.SplitSuccessors.Count > 0)
-                    {
-                        // Should never reach this case since Source Info will not cause a split
-                        // Case 2.2.1: Should be impossible to find a successor that starts on SourceInfoi.
-                        // Case 2.2.2: A split successor does not exist. We should never hit this case since we don't cause a split
-                        await Logger.LogWarningAsync($"{logMessagePrefix} [{traceEntryId}] Case 2.2: SourceInfo node creating a split successor should never occur.");
-                    }
-                    else
-                    {
-                        // Case 2.3: Weird case which can be ignored.
-                        await Logger.LogWarningAsync($"{logMessagePrefix} [{traceEntryId}] Case 2.3: Split found due to broken traces");
-                    }
-                }
-            }
         }
-        // */
     }
 
     public override async Task FinishAsync()
@@ -1147,7 +1096,15 @@ public partial class ControlFlowLeakage : AnalysisStage
                     else if(_dumpCallTree && successorNode is BranchNode branchNode)
                     {
                         // Print node
-                        await callTreeDumpWriter.WriteLineAsync($"{indentation}    #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")}");
+                        if (!_sourceNameMappings.ContainsKey(branchNode.Source.SourceName)) 
+                        {
+                            await Logger.LogWarningAsync($"{logMessagePrefix}: No source info detected for #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")}");
+                            await callTreeDumpWriter.WriteLineAsync($"{indentation}    #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")} | SourceInfo: Not available");
+                        }
+                        else
+                        {
+                            await callTreeDumpWriter.WriteLineAsync($"{indentation}    #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")} | #source {_sourceNameMappings[branchNode.Source.SourceName]}:{branchNode.Source.LineNum}:{branchNode.Source.ColNum}");
+                        }
                     }
                     else if(_dumpCallTree && _includeMemoryAccessesInCallTreeDump && successorNode is AllocationNode allocationNode)
                     {
@@ -1212,12 +1169,6 @@ public partial class ControlFlowLeakage : AnalysisStage
                                 interestingCallStackIds.Add(entry.CallStackNode.Id);
                         }
                     }
-                    else if(_dumpCallTree && successorNode is SourceInfoNode sourceNode)
-                    {
-                        // Print node
-                        await callTreeDumpWriter.WriteLineAsync($"{indentation}    #source {_sourceNameMappings[sourceNode.SourceName]}:{sourceNode.ColNum}:{sourceNode.LineNum}");
-                    }
-
                 }
 
                 // Done, move to split successors

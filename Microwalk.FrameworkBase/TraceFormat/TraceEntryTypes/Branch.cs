@@ -8,15 +8,19 @@ namespace Microwalk.FrameworkBase.TraceFormat.TraceEntryTypes;
 public class Branch : ITraceEntry
 {
     public TraceEntryTypes EntryType => TraceEntryTypes.Branch;
-    public const int EntrySize = 1 + 4 + 4 + 4 + 4 + 1 + 1;
+    public const int EntrySize = 1 + 4 + 4 + 4 + 4 + 1 + 2 + 8 + 8 + 1;
 
     public void FromReader(IFastBinaryReader reader)
     {
+        Source = new SourceInfo();
         SourceImageId = reader.ReadInt32();
         SourceInstructionRelativeAddress = reader.ReadUInt32();
         DestinationImageId = reader.ReadInt32();
         DestinationInstructionRelativeAddress = reader.ReadUInt32();
         Taken = reader.ReadBoolean();
+        Source.ColNum = reader.ReadUInt16();
+        Source.LineNum = reader.ReadUInt64();
+        Source.SourceName = reader.ReadUInt64();
         BranchType = (BranchTypes)reader.ReadByte();
     }
 
@@ -28,6 +32,9 @@ public class Branch : ITraceEntry
         writer.WriteInt32(DestinationImageId);
         writer.WriteUInt32(DestinationInstructionRelativeAddress);
         writer.WriteBoolean(Taken);
+        writer.WriteUInt16(Source.ColNum);
+        writer.WriteUInt64(Source.LineNum);
+        writer.WriteUInt64(Source.SourceName);
         writer.WriteByte((byte)BranchType);
     }
 
@@ -60,6 +67,11 @@ public class Branch : ITraceEntry
     /// The type of the branching instruction.
     /// </summary>
     public BranchTypes BranchType { get; set; }
+
+    /// <summary>
+    /// The source info associated with this branching instruction.
+    /// </summary>
+    public SourceInfo Source { get; set; }
 
     /// <summary>
     /// The type of the branching instruction.
