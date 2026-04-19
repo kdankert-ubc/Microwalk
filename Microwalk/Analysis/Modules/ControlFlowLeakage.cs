@@ -1099,11 +1099,11 @@ public partial class ControlFlowLeakage : AnalysisStage
                         if (!_sourceNameMappings.ContainsKey(branchNode.Source.SourceName)) 
                         {
                             await Logger.LogWarningAsync($"{logMessagePrefix}: No source info detected for #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")}");
-                            await callTreeDumpWriter.WriteLineAsync($"{indentation}    #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")} | SourceInfo: Not available");
+                            await callTreeDumpWriter.WriteLineAsync($"{indentation}    #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")} | #source: not available");
                         }
                         else
                         {
-                            await callTreeDumpWriter.WriteLineAsync($"{indentation}    #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")} | #source {_sourceNameMappings[branchNode.Source.SourceName]}:{branchNode.Source.LineNum}:{branchNode.Source.ColNum}");
+                            await callTreeDumpWriter.WriteLineAsync($"{indentation}    #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")} | #source: {_sourceNameMappings[branchNode.Source.SourceName]}:{branchNode.Source.LineNum}:{branchNode.Source.ColNum}");
                         }
                     }
                     else if(_dumpCallTree && _includeMemoryAccessesInCallTreeDump && successorNode is AllocationNode allocationNode)
