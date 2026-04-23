@@ -32,9 +32,9 @@ public class Branch : ITraceEntry
         writer.WriteInt32(DestinationImageId);
         writer.WriteUInt32(DestinationInstructionRelativeAddress);
         writer.WriteBoolean(Taken);
-        writer.WriteUInt16(Source.ColNum);
-        writer.WriteUInt64(Source.LineNum);
-        writer.WriteUInt64(Source.SourceName);
+        writer.WriteUInt16(Source?.ColNum ?? 0);
+        writer.WriteUInt64(Source?.LineNum ?? 0);
+        writer.WriteUInt64(Source?.SourceName ?? 0);
         writer.WriteByte((byte)BranchType);
     }
 
@@ -71,7 +71,7 @@ public class Branch : ITraceEntry
     /// <summary>
     /// The source info associated with this branching instruction.
     /// </summary>
-    public SourceInfo Source { get; set; }
+    public SourceInfo? Source { get; set; }
 
     /// <summary>
     /// The type of the branching instruction.

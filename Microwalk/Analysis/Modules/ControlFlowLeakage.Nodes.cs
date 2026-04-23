@@ -91,7 +91,7 @@ public partial class ControlFlowLeakage
 
     private class BranchNode : CallTreeNode
     {
-        public BranchNode(ulong sourceInstructionId, ulong targetInstructionId, bool taken, SourceInfo sourceInfo)
+        public BranchNode(ulong sourceInstructionId, ulong targetInstructionId, bool taken, SourceInfo? sourceInfo)
         {
             SourceInstructionId = sourceInstructionId;
             TargetInstructionId = targetInstructionId;
@@ -117,7 +117,7 @@ public partial class ControlFlowLeakage
         /// <summary>
         /// Source info for this branch
         /// </summary>
-        public SourceInfo Source { get; }
+        public SourceInfo? Source { get; }
 
         public override bool Equals(object? obj)
         {
@@ -140,7 +140,7 @@ public partial class ControlFlowLeakage
     private class ReturnNode : BranchNode
     {
         public ReturnNode(ulong sourceInstructionId, ulong targetInstructionId)
-            : base(sourceInstructionId, targetInstructionId, true, new SourceInfo())
+            : base(sourceInstructionId, targetInstructionId, true, null)
         {
         }
     }

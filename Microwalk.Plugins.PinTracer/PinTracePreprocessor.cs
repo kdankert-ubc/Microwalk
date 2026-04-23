@@ -228,12 +228,7 @@ public class PinTracePreprocessor : PreprocessorStage
         var heapAllocationLookup = new SortedList<ulong, HeapAllocation>();
         int nextHeapAllocationId = isPrefix ? 0 : _tracePrefixLastHeapAllocationId + 1;
         int nextStackAllocationId = isPrefix ? 0 : _tracePrefixLastStackAllocationId + 1;
-        var lastSourceInfo = new SourceInfo 
-        {
-            ColNum = 0, 
-            LineNum = 0, 
-            SourceName = 0 
-        };
+        SourceInfo? lastSourceInfo = null;
         fixed(byte* inputFilePtr = inputFile)
         {
             for(long pos = 0; pos < inputFileLength; pos += rawTraceEntrySize)
@@ -458,20 +453,10 @@ public class PinTracePreprocessor : PreprocessorStage
                             SourceInstructionRelativeAddress = (uint)(rawTraceEntry.Param1 - sourceImage.StartAddress),
                             DestinationImageId = destinationImageId,
                             DestinationInstructionRelativeAddress = (uint)(rawTraceEntry.Param2 - destinationImage!.StartAddress),
-                            Source = new SourceInfo 
-                            {
-                                ColNum = lastSourceInfo.ColNum,
-                                LineNum = lastSourceInfo.LineNum,
-                                SourceName = lastSourceInfo.SourceName
-                            },                            
+                            Source = lastSourceInfo,                 
                             Taken = (flags & RawTraceBranchEntryFlags.Taken) != 0
                         };
-                        lastSourceInfo = new SourceInfo 
-                        {
-                            ColNum = 0, 
-                            LineNum = 0, 
-                            SourceName = 0 
-                        };
+                        lastSourceInfo = null;
                         var rawBranchType = flags & RawTraceBranchEntryFlags.BranchEntryTypeMask;
                         if(rawBranchType == RawTraceBranchEntryFlags.Jump)
                             entry.BranchType = Branch.BranchTypes.Jump;

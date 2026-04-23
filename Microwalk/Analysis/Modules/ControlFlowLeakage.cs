@@ -47,7 +47,7 @@ public partial class ControlFlowLeakage : AnalysisStage
     /// <summary>
     /// Path to the JSAtom to source file name mapping file.
     /// </summary>
-    private string _sourceInfoMappingPath = null!;
+    private string? _sourceInfoMappingPath = null!;
 
     /// <summary>
     /// Controls whether the call tree should be written to a dump file.
@@ -72,7 +72,7 @@ public partial class ControlFlowLeakage : AnalysisStage
     /// <summary>
     /// Saving the initialized module options.
     /// </summary>
-    private MappingNode _moduleOptions = null;
+    private MappingNode? _moduleOptions = null;
 
     /// <summary>
     /// Lookup for formatted image addresses.
@@ -897,17 +897,21 @@ public partial class ControlFlowLeakage : AnalysisStage
         await using var callTreeDumpWriter = new StreamWriter(File.Create(Path.Combine(_outputDirectory.FullName, "call-tree-dump.txt")));
 
         // Fills source info name to JSAtom mapping
-        _sourceInfoMappingPath = _moduleOptions.GetChildNodeOrDefault("source-info-mappings")?.AsString() ?? throw new ConfigurationException("Invalid source info file mapping in config.");
-        var lines = await File.ReadAllLinesAsync(_sourceInfoMappingPath);
-        foreach (var line in lines)
-        {
-            if (string.IsNullOrWhiteSpace(line)) continue;
+        _sourceInfoMappingPath = _moduleOptions?.GetChildNodeOrDefault("source-info-mappings")?.AsString();
 
-            int colonIndex = line.IndexOf(':');
-            if (colonIndex != -1 && ulong.TryParse(line.AsSpan(0, colonIndex), out ulong id))
+        if (!string.IsNullOrEmpty(_sourceInfoMappingPath) && File.Exists(_sourceInfoMappingPath))
+        {
+            var lines = await File.ReadAllLinesAsync(_sourceInfoMappingPath);
+            foreach (var line in lines)
             {
-                string fileName = line.Substring(colonIndex + 1);
-                _sourceNameMappings[id] = fileName;
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                int colonIndex = line.IndexOf(':');
+                if (colonIndex != -1 && ulong.TryParse(line.AsSpan(0, colonIndex), out ulong id))
+                {
+                    string fileName = line.Substring(colonIndex + 1);
+                    _sourceNameMappings[id] = fileName;
+                }
             }
         }
         
@@ -1096,9 +1100,13 @@ public partial class ControlFlowLeakage : AnalysisStage
                     else if(_dumpCallTree && successorNode is BranchNode branchNode)
                     {
                         // Print node
-                        if (!_sourceNameMappings.ContainsKey(branchNode.Source.SourceName)) 
+                        if (branchNode.Source is null)
                         {
-                            await Logger.LogWarningAsync($"{logMessagePrefix}: No source info detected for #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")}");
+                            await callTreeDumpWriter.WriteLineAsync($"{indentation}    #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")}");
+                        }
+                        else if (!_sourceNameMappings.ContainsKey(branchNode.Source.SourceName)) 
+                        {
+                            await Logger.LogWarningAsync($"{logMessagePrefix}: No source name detected for #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")}");
                             await callTreeDumpWriter.WriteLineAsync($"{indentation}    #branch {_formattedImageAddresses[branchNode.SourceInstructionId]} -> {(branchNode.Taken ? _formattedImageAddresses[branchNode.TargetInstructionId] : "<?> (not taken)")} | #source: not available");
                         }
                         else
