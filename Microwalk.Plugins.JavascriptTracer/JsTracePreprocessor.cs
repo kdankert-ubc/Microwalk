@@ -300,7 +300,7 @@ public class JsTracePreprocessor : PreprocessorStage
         int lastLineId = 0;
         int inputBufferLength = 0;
         int inputBufferPosition = 0;
-        char[] inputBuffer = new char[1 * 1024 * 1024];
+        char[] inputBuffer = new char[8 * 1024 * 1024];
         char[] lineBuffer = new char[1024]; // For storing a single, decompressed line
         while(true)
         {
